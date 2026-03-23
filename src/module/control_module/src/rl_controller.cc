@@ -31,6 +31,28 @@ void RLController::Init(const YAML::Node& cfg_node) {
   // std::cout << "stiffness: " << joint_conf_.stiffness.transpose() << std::endl;
   // std::cout << "damping: " << joint_conf_.damping.transpose() << std::endl;
 
+  // ------
+  // yumx:加载关节物理限位（按 joint_list 顺序）
+  {
+    const auto& limits_node = cfg_node["joint_limits"];
+    const size_t n = joint_names_.size();
+    joint_conf_.pos_limit_lower.resize(n);
+    joint_conf_.pos_limit_upper.resize(n);
+    for (size_t ii = 0; ii < n; ++ii) {
+      const std::string& name = joint_names_[ii];
+      if (limits_node[name]) {
+        joint_conf_.pos_limit_lower(ii) = limits_node[name]["lower"].as<double>();
+        joint_conf_.pos_limit_upper(ii) = limits_node[name]["upper"].as<double>();
+      } else {
+        // 若 YAML 中缺少该关节限位，使用无穷大（不限位）
+        joint_conf_.pos_limit_lower(ii) = -std::numeric_limits<double>::infinity();
+        joint_conf_.pos_limit_upper(ii) =  std::numeric_limits<double>::infinity();
+        fprintf(stderr, "[RLController] WARNING: no joint_limits found for '%s', skipping clamp.\n", name.c_str());
+      }
+    }
+  }
+  //-----------------
+
   // 其他 RL 参数
   // clang-format off
   walk_step_conf_.action_scale  = cfg_node["walk_step_conf"]["action_scale"].as<double>();
@@ -98,6 +120,12 @@ my_ros2_proto::msg::JointCommand RLController::GetJointCmdData() {
     double stiffness = joint_conf_.stiffness(ii);
     double damping = joint_conf_.damping(ii);
 
+    //  ------
+    //  yumx关节物理限位 clamp（在低通滤波前，避免滤波器记忆超量值）
+    pos_des = std::max(static_cast<scalar_t>(joint_conf_.pos_limit_lower(ii)),
+                       std::min(static_cast<scalar_t>(joint_conf_.pos_limit_upper(ii)), pos_des));
+
+    //  ---------
     if (lpf_conf_.paralle_list.find(joint_names_[ii]) == lpf_conf_.paralle_list.end()) {
       low_pass_filters_[ii].input(pos_des);
       double pos_des_lp = low_pass_filters_[ii].output();

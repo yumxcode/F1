@@ -35,6 +35,11 @@ class ControllerBase {
     vector_t init_state;
     vector_t stiffness;
     vector_t damping;
+    // ----
+    // yumx：上下限位
+    vector_t pos_limit_lower;  // 关节物理下限 (rad)
+    vector_t pos_limit_upper;  // 关节物理上限 (rad)
+    // ----
   } joint_conf_;
   std::vector<std::string> joint_names_;
   // from ros2 topic
