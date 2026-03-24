@@ -107,8 +107,10 @@ void JoyStickModule::MainLoop() {
   // std_srvs::srv::EmptySyncProxy rpc_proxy(core_.GetRpcHandle());
   std_msgs::msg::Float32 button_msgs;
   geometry_msgs::msg::Twist vel_msgs;
+  int32_t log_cnt = 0;
   while (run_flag_.load()) {
     JoyStruct joy_data;
+    ++log_cnt;
     joy_->GetJoyData(joy_data);
 
     for (auto float_pub : float_pubs_) {
@@ -142,6 +144,11 @@ void JoyStickModule::MainLoop() {
           if (cv.count("angular-x")) vel_msgs.angular.x = cv.at("angular-x");
           if (cv.count("angular-y")) vel_msgs.angular.y = cv.at("angular-y");
           if (cv.count("angular-z")) vel_msgs.angular.z = cv.at("angular-z");
+          if (log_cnt % 50 == 0) {
+            AIMRT_INFO("[JoyStick] Constant vel -> linear=[{:.3f}, {:.3f}, {:.3f}] angular=[{:.3f}, {:.3f}, {:.3f}]",
+                vel_msgs.linear.x, vel_msgs.linear.y, vel_msgs.linear.z,
+                vel_msgs.angular.x, vel_msgs.angular.y, vel_msgs.angular.z);
+          }
           aimrt::channel::Publish<geometry_msgs::msg::Twist>(twist_pub.pub, vel_msgs);
         } else if (limiter_) {
           // 原有摇杆轴控制逻辑
@@ -172,6 +179,11 @@ void JoyStickModule::MainLoop() {
           if (twist_pub.axis.find("angular-z") != twist_pub.axis.end()) {
             vel_msgs.angular.z = joy_data.axis[twist_pub.axis["angular-z"]];
             target_pos[idx++] = joy_data.axis[twist_pub.axis["angular-z"]];
+          }
+          if (log_cnt % 50 == 0) {
+            AIMRT_INFO("[JoyStick] Joystick vel -> linear=[{:.3f}, {:.3f}, {:.3f}] angular=[{:.3f}, {:.3f}, {:.3f}]",
+                vel_msgs.linear.x, vel_msgs.linear.y, vel_msgs.linear.z,
+                vel_msgs.angular.x, vel_msgs.angular.y, vel_msgs.angular.z);
           }
           aimrt::channel::Publish<geometry_msgs::msg::Twist>(twist_pub.pub, vel_msgs);
 
