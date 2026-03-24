@@ -21,6 +21,9 @@ struct TwistPub {
   std::map<std::string, uint8_t> axis;
   aimrt::channel::PublisherRef pub;
   aimrt::channel::PublisherRef pub_limiter;
+  // 固定速度（若设置则忽略摇杆轴输入）
+  bool use_constant_velocity = false;
+  std::map<std::string, double> constant_velocity;
 };
 
 struct ServiceClient {
