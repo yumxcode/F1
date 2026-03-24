@@ -459,6 +459,19 @@ void DcuDriverModule::PublishLoop() {
     imu_msg.orientation.z = imu.quat[3];
     imu_msg.header.stamp = stamp;
     pub_imu.Publish(imu_msg);
+    // yumx: 打印 IMU 数据（每100帧一次）
+    static uint64_t imu_print_cnt = 0;
+    if (++imu_print_cnt % 100 == 0) {
+      AIMRT_INFO("[IMU] quat(w,x,y,z)=({:.3f}, {:.3f}, {:.3f}, {:.3f}) | "
+                 "gyro(rad/s)=({:.3f}, {:.3f}, {:.3f}) | "
+                 "acc(m/s2)=({:.3f}, {:.3f}, {:.3f})",
+                 imu_msg.orientation.w, imu_msg.orientation.x,
+                 imu_msg.orientation.y, imu_msg.orientation.z,
+                 imu_msg.angular_velocity.x, imu_msg.angular_velocity.y,
+                 imu_msg.angular_velocity.z,
+                 imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y,
+                 imu_msg.linear_acceleration.z);
+    }
 
     next_loop_time += period;
     std::this_thread::sleep_until(next_loop_time);
