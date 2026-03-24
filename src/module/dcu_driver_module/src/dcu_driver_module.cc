@@ -460,6 +460,7 @@ void DcuDriverModule::PublishLoop() {
     imu_msg.header.stamp = stamp;
     pub_imu.Publish(imu_msg);
     // yumx: 打印 IMU 数据（每100帧一次）
+    /*
     static uint64_t imu_print_cnt = 0;
     if (++imu_print_cnt % 100 == 0) {
       AIMRT_INFO("[IMU] quat(w,x,y,z)=({:.3f}, {:.3f}, {:.3f}, {:.3f}) | "
@@ -472,7 +473,7 @@ void DcuDriverModule::PublishLoop() {
                  imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y,
                  imu_msg.linear_acceleration.z);
     }
-
+    */
     next_loop_time += period;
     std::this_thread::sleep_until(next_loop_time);
   }
@@ -509,6 +510,21 @@ void DcuDriverModule::JointCmdCallback(
     //             data.cmd.velocity, data.cmd.effort, data.cmd.kp, data.cmd.kd);
     xyber_ctrl_->SetMitCmd(name, data.cmd.position, data.cmd.velocity, data.cmd.effort, data.cmd.kp,
                            data.cmd.kd);
+    
+  }
+  // yumx: 打印 left_hip_pitch / left_knee_pitch 控制指令（每1000次callback约1s一次）
+  static uint64_t cmd_print_cnt = 0;
+  if (++cmd_print_cnt % 1000 == 0) {
+    auto it_hip  = joint_data_space_.find("left_hip_pitch_joint");
+    auto it_knee = joint_data_space_.find("left_knee_pitch_joint");
+    if (it_hip != joint_data_space_.end() && it_knee != joint_data_space_.end()) {
+      AIMRT_INFO("[CMD] left_hip_pitch  pos={:.4f} vel={:.4f} eff={:.4f} kp={:.2f} kd={:.2f}",
+                 it_hip->second.cmd.position,  it_hip->second.cmd.velocity,
+                 it_hip->second.cmd.effort,    it_hip->second.cmd.kp, it_hip->second.cmd.kd);
+      AIMRT_INFO("[CMD] left_knee_pitch pos={:.4f} vel={:.4f} eff={:.4f} kp={:.2f} kd={:.2f}",
+                 it_knee->second.cmd.position, it_knee->second.cmd.velocity,
+                 it_knee->second.cmd.effort,   it_knee->second.cmd.kp, it_knee->second.cmd.kd);
+    }
   }
 }
 
