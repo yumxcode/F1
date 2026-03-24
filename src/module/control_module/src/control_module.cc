@@ -60,7 +60,12 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
         } else {
           AIMRT_ERROR("Unknown controller type: {}", controller_name);
         }
+        // 将顶层 joint_limits 注入 controller 子节点，供 RLController::Init() 使用
+        if (cfg_node["joint_limits"]) {
+          iter->second["joint_limits"] = cfg_node["joint_limits"];
+        }
         controller_map_[controller_name]->Init(iter->second);
+
       }
 
       // 设置 joint_xxx_index_map_ 的尺度
