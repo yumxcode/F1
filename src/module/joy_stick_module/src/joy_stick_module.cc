@@ -113,7 +113,12 @@ void JoyStickModule::MainLoop() {
     ++log_cnt;
     joy_->GetJoyData(joy_data);
 
-    for (auto float_pub : float_pubs_) {
+    // 初始化 prev_walk_buttons_（首次循环）
+    if (prev_walk_buttons_.empty()) {
+      prev_walk_buttons_.assign(joy_data.buttons.size(), false);
+    }
+
+    for (auto& float_pub : float_pubs_) {
       bool ret = true;
       for (auto button : float_pub.buttons) {
         ret &= joy_data.buttons[button];
@@ -121,12 +126,35 @@ void JoyStickModule::MainLoop() {
       if (ret) {
         aimrt::channel::Publish<std_msgs::msg::Float32>(float_pub.pub, button_msgs);
       }
+
+      // 检测 /walk_mode 按钮上升沿，切换行走模式
+      if (float_pub.topic_name == "/walk_mode") {
+        bool all_pressed = true;
+        bool all_pressed_prev = true;
+        for (auto button : float_pub.buttons) {
+          all_pressed &= static_cast<bool>(joy_data.buttons[button]);
+          all_pressed_prev &= prev_walk_buttons_[button];
+        }
+        if (all_pressed && !all_pressed_prev) {
+          walk_mode_active_ = !walk_mode_active_;
+          AIMRT_INFO("[JoyStick] Walk mode {}", walk_mode_active_ ? "ACTIVATED" : "DEACTIVATED");
+        }
+      }
+    }
+
+    // 更新上一帧按钮状态
+    for (size_t i = 0; i < joy_data.buttons.size(); ++i) {
+      prev_walk_buttons_[i] = static_cast<bool>(joy_data.buttons[i]);
     }
 
     for (auto twist_pub : twist_pubs_) {
-      bool ret = true;
-      for (auto button : twist_pub.buttons) {
-        ret &= joy_data.buttons[button];
+      // 行走模式激活时绕过按钮检查，直接发布；否则需按住对应按钮
+      bool ret = walk_mode_active_;
+      if (!ret) {
+        ret = true;
+        for (auto button : twist_pub.buttons) {
+          ret &= joy_data.buttons[button];
+        }
       }
       if (ret) {
         // 固定速度模式：忽略摇杆轴，直接发布预设速度
@@ -150,6 +178,10 @@ void JoyStickModule::MainLoop() {
                 vel_msgs.angular.x, vel_msgs.angular.y, vel_msgs.angular.z);
           }
           aimrt::channel::Publish<geometry_msgs::msg::Twist>(twist_pub.pub, vel_msgs);
+          // 同时发布到 /cmd_vel_limiter，control_module 监听的是这个 topic
+          if (twist_pub.pub_limiter) {
+            aimrt::channel::Publish<geometry_msgs::msg::Twist>(twist_pub.pub_limiter, vel_msgs);
+          }
         } else if (limiter_) {
           // 原有摇杆轴控制逻辑
           array_t target_pos;

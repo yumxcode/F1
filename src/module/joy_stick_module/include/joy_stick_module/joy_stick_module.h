@@ -62,6 +62,10 @@ class JoyStickModule : public aimrt::ModuleBase {
   std::shared_ptr<JoyVelLimiter> limiter_ = nullptr;
 
   uint32_t freq_{};
+
+  // 行走模式状态：按一次切换，激活后自动持续发送 /cmd_vel
+  bool walk_mode_active_ = false;
+  std::vector<bool> prev_walk_buttons_;  // 用于上升沿检测
 };
 
 }  // namespace xyber_x1_infer::joy_stick_module
