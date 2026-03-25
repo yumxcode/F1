@@ -344,79 +344,6 @@ void RLController::UpdateStateEstimation() {
     propri_.projected_gravity = inverse_rot * gravity_vector;
     propri_.base_euler_xyz = QuatToXyz(quat);
   }
-
-  // ---- T1 数据采集（进入 zero 模式触发） ----
-  if (t1_logging_enabled_) {
-    // 检测进入 zero 模式的上升沿
-    bool zero_entered = zero_mode_entered_.load(std::memory_order_acquire);
-    
-    if (zero_entered && !t1_logging_triggered_) {
-      // 创建新的日志文件
-      auto now = std::chrono::system_clock::now();
-      auto time_t_now = std::chrono::system_clock::to_time_t(now);
-      std::tm tm_now{};
-#ifdef _WIN32
-      localtime_s(&tm_now, &time_t_now);
-#else
-      localtime_r(&time_t_now, &tm_now);
-#endif
-      char time_buf[64];
-      std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
-      
-      std::string log_path = t1_log_dir_ + "/t1_static_" + std::string(time_buf) + ".csv";
-      t1_log_file_.open(log_path);
-      if (t1_log_file_.is_open()) {
-        // 写入表头
-        t1_log_file_ << "timestamp_ns";
-        for (const auto& name : joint_names_) {
-          t1_log_file_ << ",pos_" << name << ",vel_" << name;
-        }
-        t1_log_file_ << ",ang_vel_x,ang_vel_y,ang_vel_z";
-        t1_log_file_ << ",euler_x,euler_y,euler_z";
-        t1_log_file_ << "\n";
-        
-        // 写入 init_state 参考行
-        t1_log_file_ << "# init_state";
-        for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
-          t1_log_file_ << "," << joint_conf_.init_state(ii) << ",0";
-        }
-        t1_log_file_ << ",0,0,0,0,0,0\n";
-        
-        t1_logging_triggered_ = true;
-        t1_log_count_ = 0;
-        fprintf(stderr, "[RLController] T1 CSV logging triggered by ZERO mode (max 40s)\n");
-        fprintf(stderr, "  - T1 Static: %s\n", log_path.c_str());
-      }
-    }
-    
-    // 如果已触发且文件打开，记录数据
-    if (t1_logging_triggered_ && t1_log_file_.is_open() && t1_log_count_ < t1_log_max_count_) {
-      auto now_ns = duration_cast<nanoseconds>(
-          high_resolution_clock::now().time_since_epoch()).count();
-      t1_log_file_ << now_ns;
-      for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
-        t1_log_file_ << "," << propri_.joint_pos(ii)
-                     << "," << propri_.joint_vel(ii);
-      }
-      t1_log_file_ << "," << propri_.base_ang_vel(0)
-                   << "," << propri_.base_ang_vel(1)
-                   << "," << propri_.base_ang_vel(2);
-      t1_log_file_ << "," << propri_.base_euler_xyz(0)
-                   << "," << propri_.base_euler_xyz(1)
-                   << "," << propri_.base_euler_xyz(2);
-      t1_log_file_ << "\n";
-      t1_log_count_++;
-      
-      if (t1_log_count_ >= t1_log_max_count_) {
-        t1_log_file_.flush();
-        t1_log_file_.close();
-        t1_logging_triggered_ = false;
-        zero_mode_entered_.store(false, std::memory_order_release);  // 重置标志
-        fprintf(stderr, "[RLController] T1 CSV logging finished (%d frames, 40s)\n", t1_log_count_);
-      }
-    }
-  }
-  // ---- T1 数据采集结束 ----
 }
 
 void RLController::ComputeObservation() {
@@ -501,6 +428,122 @@ void RLController::ComputeActions() {
                  [action_min, action_max](scalar_t x) {
                    return std::max(action_min, std::min(action_max, x));
                  });
+}
+
+void RLController::UpdateT1Logging() {
+  if (!t1_logging_enabled_) {
+    return;
+  }
+
+  // 读取最新的传感器数据（独立于 UpdateStateEstimation，因为 zero 模式下 RLController 不是活跃控制器）
+  vector_t t1_joint_pos(onnx_conf_.actions_size);
+  vector_t t1_joint_vel(onnx_conf_.actions_size);
+  vector3_t t1_ang_vel;
+  vector3_t t1_euler_xyz;
+
+  {
+    std::shared_lock<std::shared_mutex> lock(joint_state_mutex_);
+    for (size_t ii = 0; ii < onnx_conf_.actions_size; ++ii) {
+      t1_joint_pos(ii) = joint_state_data_.position[ii];
+      t1_joint_vel(ii) = joint_state_data_.velocity[ii];
+    }
+  }
+  {
+    std::shared_lock<std::shared_mutex> lock(imu_mutex_);
+    t1_ang_vel(0) = imu_data_.angular_velocity.x;
+    t1_ang_vel(1) = imu_data_.angular_velocity.y;
+    t1_ang_vel(2) = imu_data_.angular_velocity.z;
+    quaternion_t quat;
+    quat.x() = imu_data_.orientation.x;
+    quat.y() = imu_data_.orientation.y;
+    quat.z() = imu_data_.orientation.z;
+    quat.w() = imu_data_.orientation.w;
+    t1_euler_xyz = QuatToXyz(quat);
+  }
+
+  // 检测进入 zero 模式的上升沿
+  bool zero_entered = zero_mode_entered_.load(std::memory_order_acquire);
+
+  if (zero_entered && !t1_logging_triggered_) {
+    // 如果之前有未关闭的文件，先关闭
+    if (t1_log_file_.is_open()) {
+      t1_log_file_.flush();
+      t1_log_file_.close();
+      fprintf(stderr, "[RLController] T1 logging restarted (received new zero command)\n");
+    }
+
+    // 创建新的日志文件
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_now{};
+#ifdef _WIN32
+    localtime_s(&tm_now, &time_t_now);
+#else
+    localtime_r(&time_t_now, &tm_now);
+#endif
+    char time_buf[64];
+    std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
+
+    std::string log_path = t1_log_dir_ + "/t1_static_" + std::string(time_buf) + ".csv";
+    fprintf(stderr, "[RLController] T1 attempting to open file: %s\n", log_path.c_str());
+    t1_log_file_.open(log_path);
+    if (t1_log_file_.is_open()) {
+      // 写入表头
+      t1_log_file_ << "timestamp_ns";
+      for (const auto& name : joint_names_) {
+        t1_log_file_ << ",pos_" << name << ",vel_" << name;
+      }
+      t1_log_file_ << ",ang_vel_x,ang_vel_y,ang_vel_z";
+      t1_log_file_ << ",euler_x,euler_y,euler_z";
+      t1_log_file_ << "\n";
+
+      // 写入 init_state 参考行
+      t1_log_file_ << "# init_state";
+      for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
+        t1_log_file_ << "," << joint_conf_.init_state(ii) << ",0";
+      }
+      t1_log_file_ << ",0,0,0,0,0,0\n";
+
+      t1_logging_triggered_ = true;
+      t1_log_count_ = 0;
+      fprintf(stderr, "[RLController] T1 CSV logging triggered by ZERO mode (max 40s)\n");
+      fprintf(stderr, "  - T1 Static: %s\n", log_path.c_str());
+    } else {
+      fprintf(stderr, "[RLController] ERROR: Failed to open T1 log file: %s\n", log_path.c_str());
+    }
+  }
+
+  // 如果已触发且文件打开，记录数据
+  if (t1_logging_triggered_ && t1_log_file_.is_open() && t1_log_count_ < t1_log_max_count_) {
+    auto now_ns = duration_cast<nanoseconds>(
+        high_resolution_clock::now().time_since_epoch()).count();
+    t1_log_file_ << now_ns;
+    for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
+      t1_log_file_ << "," << t1_joint_pos(ii)
+                   << "," << t1_joint_vel(ii);
+    }
+    t1_log_file_ << "," << t1_ang_vel(0)
+                 << "," << t1_ang_vel(1)
+                 << "," << t1_ang_vel(2);
+    t1_log_file_ << "," << t1_euler_xyz(0)
+                 << "," << t1_euler_xyz(1)
+                 << "," << t1_euler_xyz(2);
+    t1_log_file_ << "\n";
+    t1_log_count_++;
+
+    // 每 10000 帧打印一次进度
+    if (t1_log_count_ % 10000 == 0) {
+      fprintf(stderr, "[RLController] T1 logging progress: %d/%d frames\n", t1_log_count_, t1_log_max_count_);
+    }
+
+    if (t1_log_count_ >= t1_log_max_count_) {
+      t1_log_file_.flush();
+      t1_log_file_.close();
+      t1_logging_triggered_ = false;
+      zero_mode_entered_.store(false, std::memory_order_release);
+      fprintf(stderr, "[RLController] T1 CSV logging finished (%d frames, 40s)\n", t1_log_count_);
+    }
+  }
 }
 
 void RLController::LogT2Data() {

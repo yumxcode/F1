@@ -39,17 +39,24 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
                 controller_map_[name]->RestartController();
               }
               AIMRT_INFO("Trigger event: [{}] -> {}", trigger_topic, now_state);
+              fprintf(stderr, "[ControlModule] State changed: '%s' -> '%s' (trigger: %s)\n",
+                      last_state_name_.c_str(), now_state.c_str(), trigger_topic.c_str());
               
               // 检测进入 zero 模式（从非 zero 状态切换到 zero 状态）
               if (now_state == "zero" && last_state_name_ != "zero") {
                 zero_mode_entered_.store(true, std::memory_order_release);
+                fprintf(stderr, "[ControlModule] ZERO mode entered! Setting zero_mode_entered=true\n");
                 // 通知所有 RLController 进入 zero 模式
+                int rl_count = 0;
                 for (auto& [name, controller] : controller_map_) {
                   auto rl_controller = std::dynamic_pointer_cast<RLController>(controller);
                   if (rl_controller) {
                     rl_controller->SetZeroModeEntered(true);
+                    rl_count++;
+                    fprintf(stderr, "[ControlModule] Notified RLController '%s' of ZERO mode\n", name.c_str());
                   }
                 }
+                fprintf(stderr, "[ControlModule] Notified %d RLController(s) total\n", rl_count);
                 AIMRT_INFO("[T1 Trigger] Entered ZERO mode, T1/T1-4 logging will start");
               }
               last_state_name_ = now_state;
@@ -110,9 +117,9 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       subs_.push_back(core_.GetChannelHandle().GetSubscriber(cfg_node["sub_imu_data_name"].as<std::string>()));
       ret &= aimrt::channel::Subscribe<sensor_msgs::msg::Imu>(subs_.back(), 
         [this](const std::shared_ptr<const sensor_msgs::msg::Imu>& msg) {
-          auto controller_names = state_machine_.GetCurrentControllerNames();
-          for (const auto& name : controller_names) {
-            controller_map_[name]->SetImuData(*msg);
+          // IMU 数据转发给所有控制器（T1 日志在非活跃状态下也需要 IMU 数据）
+          for (const auto& controller : controller_map_) {
+            controller.second->SetImuData(*msg);
           }
         });
 
@@ -221,6 +228,14 @@ bool ControlModule::MainLoop() {
         }
       }
       aimrt::channel::Publish<my_ros2_proto::msg::JointCommand>(joint_cmd_pub_, cmd_msg);
+
+      // ---- T1 静态测试：始终调用所有 RLController 的 T1 日志更新（不依赖活跃状态） ----
+      for (auto& [name, controller] : controller_map_) {
+        auto rl_controller = std::dynamic_pointer_cast<RLController>(controller);
+        if (rl_controller) {
+          rl_controller->UpdateT1Logging();
+        }
+      }
 
       // ---- T1-4 延迟数据采集（进入 zero 模式触发） ----
       if (t14_logging_enabled_) {

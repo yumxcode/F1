@@ -98,6 +98,7 @@ class RLController : public ControllerBase {
   
  public:
   void SetZeroModeEntered(bool entered) { zero_mode_entered_.store(entered, std::memory_order_release); }
+  void UpdateT1Logging();  // 独立的 T1 日志更新，可在非活跃状态下调用
   
  private:
 
