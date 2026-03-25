@@ -90,9 +90,16 @@ class RLController : public ControllerBase {
   // T1 静态测试 CSV 日志
   std::ofstream t1_log_file_;
   bool t1_logging_enabled_{false};
+  bool t1_logging_triggered_{false};  // 是否已触发记录
+  std::atomic_bool zero_mode_entered_{false};  // zero 模式进入标志（由 ControlModule 设置）
   int t1_log_count_{0};
   int t1_log_max_count_{0};
   std::string t1_log_dir_;
+  
+ public:
+  void SetZeroModeEntered(bool entered) { zero_mode_entered_.store(entered, std::memory_order_release); }
+  
+ private:
 
   // T2 测试 CSV 日志
   std::ofstream t2_gait_file_;       // T2-2 步态周期

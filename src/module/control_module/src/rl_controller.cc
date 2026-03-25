@@ -80,54 +80,23 @@ void RLController::Init(const YAML::Node& cfg_node) {
 
   // ---- T1 静态测试 CSV 日志初始化 ----
   {
-    t1_log_dir_ = "test_logs";
+    t1_log_dir_ = "test_logs/data_csv";
     std::filesystem::create_directories(t1_log_dir_);
 
-    auto now = std::chrono::system_clock::now();
-    auto time_t_now = std::chrono::system_clock::to_time_t(now);
-    std::tm tm_now{};
-#ifdef _WIN32
-    localtime_s(&tm_now, &time_t_now);
-#else
-    localtime_r(&time_t_now, &tm_now);
-#endif
-    char time_buf[64];
-    std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
-
-    std::string log_path = t1_log_dir_ + "/t1_static_" + std::string(time_buf) + ".csv";
-    t1_log_file_.open(log_path);
-    if (t1_log_file_.is_open()) {
-      // 写入表头
-      t1_log_file_ << "timestamp_ns";
-      for (const auto& name : joint_names_) {
-        t1_log_file_ << ",pos_" << name << ",vel_" << name;
-      }
-      t1_log_file_ << ",ang_vel_x,ang_vel_y,ang_vel_z";
-      t1_log_file_ << ",euler_x,euler_y,euler_z";
-      t1_log_file_ << "\n";
-
-      // 写入 init_state 参考行
-      t1_log_file_ << "# init_state";
-      for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
-        t1_log_file_ << "," << joint_conf_.init_state(ii) << ",0";
-      }
-      t1_log_file_ << ",0,0,0,0,0,0\n";
-    }
-
-    t1_log_max_count_ = 60000;  // 60s * 1000Hz
+    // T1 改为触发式记录，不在初始化时打开文件
+    t1_log_max_count_ = 40000;  // 40s * 1000Hz
     t1_log_count_ = 0;
-    t1_logging_enabled_ = t1_log_file_.is_open();
+    t1_logging_enabled_ = true;  // 启用功能，但等待触发
+    t1_logging_triggered_ = false;
+    t1_last_cmd_zero_ = false;
 
-    if (t1_logging_enabled_) {
-      fprintf(stderr, "[RLController] T1 CSV logging started (max %d frames)\n", t1_log_max_count_);
-      fprintf(stderr, "  - T1 Static: %s\n", log_path.c_str());
-    }
+    fprintf(stderr, "[RLController] T1 CSV logging enabled (waiting for joystick zero trigger, max 40s)\n");
   }
   // ---- T1 日志初始化结束 ----
 
   // ---- T2 测试 CSV 日志初始化 ----
   {
-    t2_log_dir_ = "test_logs";
+    t2_log_dir_ = "test_logs/data_csv";
     std::filesystem::create_directories(t2_log_dir_);
 
     auto now = std::chrono::system_clock::now();
@@ -201,7 +170,7 @@ void RLController::Init(const YAML::Node& cfg_node) {
 
   // ---- T3 测试 CSV 日志初始化 ----
   {
-    t3_log_dir_ = "test_logs";
+    t3_log_dir_ = "test_logs/data_csv";
     std::filesystem::create_directories(t3_log_dir_);
 
     auto now = std::chrono::system_clock::now();
@@ -377,28 +346,75 @@ void RLController::UpdateStateEstimation() {
     propri_.base_euler_xyz = QuatToXyz(quat);
   }
 
-  // ---- T1 数据采集 ----
-  if (t1_logging_enabled_ && t1_log_count_ < t1_log_max_count_) {
-    auto now_ns = duration_cast<nanoseconds>(
-        high_resolution_clock::now().time_since_epoch()).count();
-    t1_log_file_ << now_ns;
-    for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
-      t1_log_file_ << "," << propri_.joint_pos(ii)
-                   << "," << propri_.joint_vel(ii);
+  // ---- T1 数据采集（进入 zero 模式触发） ----
+  if (t1_logging_enabled_) {
+    // 检测进入 zero 模式的上升沿
+    bool zero_entered = zero_mode_entered_.load(std::memory_order_acquire);
+    
+    if (zero_entered && !t1_logging_triggered_) {
+      // 创建新的日志文件
+      auto now = std::chrono::system_clock::now();
+      auto time_t_now = std::chrono::system_clock::to_time_t(now);
+      std::tm tm_now{};
+#ifdef _WIN32
+      localtime_s(&tm_now, &time_t_now);
+#else
+      localtime_r(&time_t_now, &tm_now);
+#endif
+      char time_buf[64];
+      std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
+      
+      std::string log_path = t1_log_dir_ + "/t1_static_" + std::string(time_buf) + ".csv";
+      t1_log_file_.open(log_path);
+      if (t1_log_file_.is_open()) {
+        // 写入表头
+        t1_log_file_ << "timestamp_ns";
+        for (const auto& name : joint_names_) {
+          t1_log_file_ << ",pos_" << name << ",vel_" << name;
+        }
+        t1_log_file_ << ",ang_vel_x,ang_vel_y,ang_vel_z";
+        t1_log_file_ << ",euler_x,euler_y,euler_z";
+        t1_log_file_ << "\n";
+        
+        // 写入 init_state 参考行
+        t1_log_file_ << "# init_state";
+        for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
+          t1_log_file_ << "," << joint_conf_.init_state(ii) << ",0";
+        }
+        t1_log_file_ << ",0,0,0,0,0,0\n";
+        
+        t1_logging_triggered_ = true;
+        t1_log_count_ = 0;
+        fprintf(stderr, "[RLController] T1 CSV logging triggered by ZERO mode (max 40s)\n");
+        fprintf(stderr, "  - T1 Static: %s\n", log_path.c_str());
+      }
     }
-    t1_log_file_ << "," << propri_.base_ang_vel(0)
-                 << "," << propri_.base_ang_vel(1)
-                 << "," << propri_.base_ang_vel(2);
-    t1_log_file_ << "," << propri_.base_euler_xyz(0)
-                 << "," << propri_.base_euler_xyz(1)
-                 << "," << propri_.base_euler_xyz(2);
-    t1_log_file_ << "\n";
-    t1_log_count_++;
-    if (t1_log_count_ >= t1_log_max_count_) {
-      t1_log_file_.flush();
-      t1_log_file_.close();
-      t1_logging_enabled_ = false;
-      fprintf(stderr, "[RLController] T1 CSV logging finished (%d frames)\n", t1_log_count_);
+    
+    // 如果已触发且文件打开，记录数据
+    if (t1_logging_triggered_ && t1_log_file_.is_open() && t1_log_count_ < t1_log_max_count_) {
+      auto now_ns = duration_cast<nanoseconds>(
+          high_resolution_clock::now().time_since_epoch()).count();
+      t1_log_file_ << now_ns;
+      for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
+        t1_log_file_ << "," << propri_.joint_pos(ii)
+                     << "," << propri_.joint_vel(ii);
+      }
+      t1_log_file_ << "," << propri_.base_ang_vel(0)
+                   << "," << propri_.base_ang_vel(1)
+                   << "," << propri_.base_ang_vel(2);
+      t1_log_file_ << "," << propri_.base_euler_xyz(0)
+                   << "," << propri_.base_euler_xyz(1)
+                   << "," << propri_.base_euler_xyz(2);
+      t1_log_file_ << "\n";
+      t1_log_count_++;
+      
+      if (t1_log_count_ >= t1_log_max_count_) {
+        t1_log_file_.flush();
+        t1_log_file_.close();
+        t1_logging_triggered_ = false;
+        zero_mode_entered_.store(false, std::memory_order_release);  // 重置标志
+        fprintf(stderr, "[RLController] T1 CSV logging finished (%d frames, 40s)\n", t1_log_count_);
+      }
     }
   }
   // ---- T1 数据采集结束 ----

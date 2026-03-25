@@ -39,6 +39,20 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
                 controller_map_[name]->RestartController();
               }
               AIMRT_INFO("Trigger event: [{}] -> {}", trigger_topic, now_state);
+              
+              // 检测进入 zero 模式（从非 zero 状态切换到 zero 状态）
+              if (now_state == "zero" && last_state_name_ != "zero") {
+                zero_mode_entered_.store(true, std::memory_order_release);
+                // 通知所有 RLController 进入 zero 模式
+                for (auto& [name, controller] : controller_map_) {
+                  auto rl_controller = std::dynamic_pointer_cast<RLController>(controller);
+                  if (rl_controller) {
+                    rl_controller->SetZeroModeEntered(true);
+                  }
+                }
+                AIMRT_INFO("[T1 Trigger] Entered ZERO mode, T1/T1-4 logging will start");
+              }
+              last_state_name_ = now_state;
             }
           });
         AIMRT_CHECK_ERROR_THROW(ret, "Subscribe failed.");
@@ -137,33 +151,16 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 
       // ---- T1-4 延迟测试 CSV 日志初始化 ----
       {
-        std::string log_dir = "test_logs";
-        std::filesystem::create_directories(log_dir);
+        t14_log_dir_ = "test_logs/data_csv";
+        std::filesystem::create_directories(t14_log_dir_);
 
-        auto now = std::chrono::system_clock::now();
-        auto time_t_now = std::chrono::system_clock::to_time_t(now);
-        std::tm tm_now{};
-#ifdef _WIN32
-        localtime_s(&tm_now, &time_t_now);
-#else
-        localtime_r(&time_t_now, &tm_now);
-#endif
-        char time_buf[64];
-        std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
-
-        std::string log_path = log_dir + "/t14_delay_" + std::string(time_buf) + ".csv";
-        t14_log_file_.open(log_path);
-        if (t14_log_file_.is_open()) {
-          t14_log_file_ << "timestamp_ns,recv_ns,send_ns,round_trip_ms\n";
-        }
-        t14_log_max_count_ = 30 * freq_;
+        // T1-4 改为触发式记录，不在初始化时打开文件
+        t14_log_max_count_ = 40 * freq_;  // 40s
         t14_log_count_ = 0;
-        t14_logging_enabled_ = t14_log_file_.is_open();
+        t14_logging_enabled_ = true;  // 启用功能，但等待触发
+        t14_logging_triggered_ = false;
 
-        if (t14_logging_enabled_) {
-          fprintf(stderr, "[ControlModule] T1-4 delay logging started (max %d frames)\n", t14_log_max_count_);
-          fprintf(stderr, "  - T1-4 Delay: %s\n", log_path.c_str());
-        }
+        fprintf(stderr, "[ControlModule] T1-4 delay logging enabled (waiting for trigger, max 40s)\n");
       }
       // ---- T1-4 日志初始化结束 ----
     }
@@ -225,22 +222,53 @@ bool ControlModule::MainLoop() {
       }
       aimrt::channel::Publish<my_ros2_proto::msg::JointCommand>(joint_cmd_pub_, cmd_msg);
 
-      // ---- T1-4 延迟数据采集 ----
-      if (t14_logging_enabled_ && t14_log_count_ < t14_log_max_count_) {
-        auto send_ns = duration_cast<nanoseconds>(
-            high_resolution_clock::now().time_since_epoch()).count();
-        auto recv_ns = last_joint_state_recv_ns_.load(std::memory_order_relaxed);
-        double round_trip_ms = (send_ns - recv_ns) / 1e6;
+      // ---- T1-4 延迟数据采集（进入 zero 模式触发） ----
+      if (t14_logging_enabled_) {
+        // 检测进入 zero 模式的上升沿
+        bool zero_entered = zero_mode_entered_.load(std::memory_order_acquire);
+        
+        if (zero_entered && !t14_logging_triggered_) {
+          // 创建新的日志文件
+          auto now = std::chrono::system_clock::now();
+          auto time_t_now = std::chrono::system_clock::to_time_t(now);
+          std::tm tm_now{};
+#ifdef _WIN32
+          localtime_s(&tm_now, &time_t_now);
+#else
+          localtime_r(&time_t_now, &tm_now);
+#endif
+          char time_buf[64];
+          std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
+          
+          std::string log_path = t14_log_dir_ + "/t14_delay_" + std::string(time_buf) + ".csv";
+          t14_log_file_.open(log_path);
+          if (t14_log_file_.is_open()) {
+            t14_log_file_ << "timestamp_ns,recv_ns,send_ns,round_trip_ms\n";
+            t14_logging_triggered_ = true;
+            t14_log_count_ = 0;
+            fprintf(stderr, "[ControlModule] T1-4 delay logging triggered by ZERO mode (max 40s)\n");
+            fprintf(stderr, "  - T1-4 Delay: %s\n", log_path.c_str());
+          }
+        }
+        
+        // 如果已触发且文件打开，记录数据
+        if (t14_logging_triggered_ && t14_log_file_.is_open() && t14_log_count_ < t14_log_max_count_) {
+          auto send_ns = duration_cast<nanoseconds>(
+              high_resolution_clock::now().time_since_epoch()).count();
+          auto recv_ns = last_joint_state_recv_ns_.load(std::memory_order_relaxed);
+          double round_trip_ms = (send_ns - recv_ns) / 1e6;
 
-        t14_log_file_ << send_ns << "," << recv_ns << "," << send_ns
-                      << "," << round_trip_ms << "\n";
-        t14_log_count_++;
+          t14_log_file_ << send_ns << "," << recv_ns << "," << send_ns
+                        << "," << round_trip_ms << "\n";
+          t14_log_count_++;
 
-        if (t14_log_count_ >= t14_log_max_count_) {
-          t14_log_file_.flush();
-          t14_log_file_.close();
-          t14_logging_enabled_ = false;
-          fprintf(stderr, "[ControlModule] T1-4 delay logging finished (%d frames)\n", t14_log_count_);
+          if (t14_log_count_ >= t14_log_max_count_) {
+            t14_log_file_.flush();
+            t14_log_file_.close();
+            t14_logging_triggered_ = false;
+            zero_mode_entered_.store(false, std::memory_order_release);  // 重置标志
+            fprintf(stderr, "[ControlModule] T1-4 delay logging finished (%d frames, 40s)\n", t14_log_count_);
+          }
         }
       }
       // ---- T1-4 数据采集结束 ----
