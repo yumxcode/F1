@@ -3,6 +3,8 @@
 #include <memory>
 #include <set>
 #include <atomic>
+#include <fstream>
+#include <filesystem>
 
 #include "control_module/controller_base.h"
 #include "control_module/rotation_tools.h"
@@ -84,6 +86,38 @@ class RLController : public ControllerBase {
   int64_t loop_count_;
   std::vector<digital_lp_filter<double>> low_pass_filters_;
   std::atomic_bool is_first_frame_{true};
+
+  // T1 静态测试 CSV 日志
+  std::ofstream t1_log_file_;
+  bool t1_logging_enabled_{false};
+  int t1_log_count_{0};
+  int t1_log_max_count_{0};
+  std::string t1_log_dir_;
+
+  // T2 测试 CSV 日志
+  std::ofstream t2_gait_file_;       // T2-2 步态周期
+  std::ofstream t2_joint_file_;      // T2-3 关节轨迹
+  std::ofstream t2_pose_file_;       // T2-4 机身姿态
+  std::ofstream t2_action_file_;     // T2-5 网络输出
+  bool t2_logging_enabled_{false};
+  int t2_log_count_{0};
+  int t2_log_max_count_{0};
+  std::string t2_log_dir_;
+  // T2 步态检测辅助变量
+  bool last_contact_state_[2]{false, false};
+  double last_contact_time_[2]{0.0, 0.0};
+
+  void LogT2Data();
+  bool DetectFootContact(int foot_idx);
+
+  // T3 测试 CSV 日志
+  std::ofstream t3_current_file_;       // T3 电机电流
+  bool t3_logging_enabled_{false};
+  int t3_log_count_{0};
+  int t3_log_max_count_{0};
+  std::string t3_log_dir_;
+
+  void LogT3Data();
 };
 
 }  // namespace xyber_x1_infer::rl_control_module

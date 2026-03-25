@@ -121,6 +121,11 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
           for (const auto& controller : controller_map_) {
             controller.second->SetJointStateData(temp_msg, joint_state_index_map_);
           }
+
+          // T1-4: 记录 JointState 接收时间戳
+          last_joint_state_recv_ns_.store(
+              duration_cast<nanoseconds>(high_resolution_clock::now().time_since_epoch()).count(),
+              std::memory_order_relaxed);
         });
       AIMRT_CHECK_ERROR_THROW(ret, "Subscribe failed.");
 
@@ -129,6 +134,38 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       executor_ = core_.GetExecutorManager().GetExecutor("rl_control_pub_thread");
       AIMRT_CHECK_ERROR_THROW(executor_, "Can not get executor 'rl_control_pub_thread'.");
       aimrt::channel::RegisterPublishType<my_ros2_proto::msg::JointCommand>(joint_cmd_pub_);
+
+      // ---- T1-4 延迟测试 CSV 日志初始化 ----
+      {
+        std::string log_dir = "test_logs";
+        std::filesystem::create_directories(log_dir);
+
+        auto now = std::chrono::system_clock::now();
+        auto time_t_now = std::chrono::system_clock::to_time_t(now);
+        std::tm tm_now{};
+#ifdef _WIN32
+        localtime_s(&tm_now, &time_t_now);
+#else
+        localtime_r(&time_t_now, &tm_now);
+#endif
+        char time_buf[64];
+        std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
+
+        std::string log_path = log_dir + "/t14_delay_" + std::string(time_buf) + ".csv";
+        t14_log_file_.open(log_path);
+        if (t14_log_file_.is_open()) {
+          t14_log_file_ << "timestamp_ns,recv_ns,send_ns,round_trip_ms\n";
+        }
+        t14_log_max_count_ = 30 * freq_;
+        t14_log_count_ = 0;
+        t14_logging_enabled_ = t14_log_file_.is_open();
+
+        if (t14_logging_enabled_) {
+          fprintf(stderr, "[ControlModule] T1-4 delay logging started (max %d frames)\n", t14_log_max_count_);
+          fprintf(stderr, "  - T1-4 Delay: %s\n", log_path.c_str());
+        }
+      }
+      // ---- T1-4 日志初始化结束 ----
     }
   } catch (const std::exception& e) {
     AIMRT_ERROR("Init failed, {}", e.what());
@@ -187,6 +224,26 @@ bool ControlModule::MainLoop() {
         }
       }
       aimrt::channel::Publish<my_ros2_proto::msg::JointCommand>(joint_cmd_pub_, cmd_msg);
+
+      // ---- T1-4 延迟数据采集 ----
+      if (t14_logging_enabled_ && t14_log_count_ < t14_log_max_count_) {
+        auto send_ns = duration_cast<nanoseconds>(
+            high_resolution_clock::now().time_since_epoch()).count();
+        auto recv_ns = last_joint_state_recv_ns_.load(std::memory_order_relaxed);
+        double round_trip_ms = (send_ns - recv_ns) / 1e6;
+
+        t14_log_file_ << send_ns << "," << recv_ns << "," << send_ns
+                      << "," << round_trip_ms << "\n";
+        t14_log_count_++;
+
+        if (t14_log_count_ >= t14_log_max_count_) {
+          t14_log_file_.flush();
+          t14_log_file_.close();
+          t14_logging_enabled_ = false;
+          fprintf(stderr, "[ControlModule] T1-4 delay logging finished (%d frames)\n", t14_log_count_);
+        }
+      }
+      // ---- T1-4 数据采集结束 ----
     }
     AIMRT_INFO("Exit MainLoop.");
   } catch (const std::exception& e) {

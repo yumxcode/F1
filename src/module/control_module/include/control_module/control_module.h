@@ -3,6 +3,8 @@
 #include <chrono>
 #include <memory>
 #include <set>
+#include <fstream>
+#include <filesystem>
 #include "aimrt_module_cpp_interface/module_base.h"
 #include "control_module/pd_controller.h"
 #include "control_module/rl_controller.h"
@@ -45,6 +47,13 @@ class ControlModule : public aimrt::ModuleBase {
   int32_t freq_;
   std::atomic_bool run_flag_{true};
   time_point<high_resolution_clock> last_trigger_time_;
+
+  // T1-4 延迟测试 CSV 日志
+  std::ofstream t14_log_file_;
+  bool t14_logging_enabled_{false};
+  int t14_log_count_{0};
+  int t14_log_max_count_{0};
+  std::atomic<int64_t> last_joint_state_recv_ns_{0};
 };
 
 }  // namespace xyber_x1_infer::rl_control_module
