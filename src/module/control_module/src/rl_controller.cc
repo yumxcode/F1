@@ -88,7 +88,6 @@ void RLController::Init(const YAML::Node& cfg_node) {
     t1_log_count_ = 0;
     t1_logging_enabled_ = true;  // 启用功能，但等待触发
     t1_logging_triggered_ = false;
-    t1_last_cmd_zero_ = false;
 
     fprintf(stderr, "[RLController] T1 CSV logging enabled (waiting for joystick zero trigger, max 40s)\n");
   }
