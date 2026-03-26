@@ -89,67 +89,29 @@ void RLController::Init(const YAML::Node& cfg_node) {
     t1_logging_enabled_ = true;  // 启用功能，但等待触发
     t1_logging_triggered_ = false;
 
-    fprintf(stderr, "[RLController] T1 CSV logging enabled (waiting for joystick zero trigger, max 40s)\n");
+    // T1 独立 observation 计算状态初始化
+    t1_propri_history_buffer_.resize(onnx_conf_.observations_size * onnx_conf_.num_hist);
+    t1_propri_history_buffer_.setZero();
+    t1_last_actions_.resize(onnx_conf_.actions_size);
+    t1_last_actions_.setZero();
+    t1_is_first_obs_frame_ = true;
+
+    fprintf(stderr, "[RLController] T1 observation logging enabled (obs_size=%d, num_hist=%d, total=%d, max 40s)\n",
+            onnx_conf_.observations_size, onnx_conf_.num_hist,
+            onnx_conf_.observations_size * onnx_conf_.num_hist);
   }
   // ---- T1 日志初始化结束 ----
 
-  // ---- T2 测试 CSV 日志初始化 ----
+  // ---- T2 测试 CSV 日志初始化（触发式，进入 walk_leg 后开始记录） ----
   {
     t2_log_dir_ = "test_logs/data_csv";
     std::filesystem::create_directories(t2_log_dir_);
 
-    auto now = std::chrono::system_clock::now();
-    auto time_t_now = std::chrono::system_clock::to_time_t(now);
-    std::tm tm_now{};
-#ifdef _WIN32
-    localtime_s(&tm_now, &time_t_now);
-#else
-    localtime_r(&time_t_now, &tm_now);
-#endif
-    char time_buf[64];
-    std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
-
-    // T2-2: 步态周期
-    std::string gait_path = t2_log_dir_ + "/t22_gait_" + std::string(time_buf) + ".csv";
-    t2_gait_file_.open(gait_path);
-    if (t2_gait_file_.is_open()) {
-      t2_gait_file_ << "timestamp_ns,left_contact,right_contact,cycle_time_ms\n";
-    }
-
-    // T2-3: 关节轨迹
-    std::string joint_path = t2_log_dir_ + "/t23_joint_" + std::string(time_buf) + ".csv";
-    t2_joint_file_.open(joint_path);
-    if (t2_joint_file_.is_open()) {
-      t2_joint_file_ << "timestamp_ns";
-      for (const auto& name : joint_names_) {
-        t2_joint_file_ << ",pos_" << name << ",vel_" << name << ",target_" << name;
-      }
-      t2_joint_file_ << "\n";
-    }
-
-    // T2-4: 机身姿态
-    std::string pose_path = t2_log_dir_ + "/t24_pose_" + std::string(time_buf) + ".csv";
-    t2_pose_file_.open(pose_path);
-    if (t2_pose_file_.is_open()) {
-      t2_pose_file_ << "timestamp_ns,euler_x,euler_y,euler_z,ang_vel_x,ang_vel_y,ang_vel_z,lin_vel_x,lin_vel_y,lin_vel_z\n";
-    }
-
-    // T2-5: 网络输出 Action
-    std::string action_path = t2_log_dir_ + "/t25_action_" + std::string(time_buf) + ".csv";
-    t2_action_file_.open(action_path);
-    if (t2_action_file_.is_open()) {
-      t2_action_file_ << "timestamp_ns";
-      for (const auto& name : joint_names_) {
-        t2_action_file_ << ",action_" << name;
-      }
-      t2_action_file_ << ",clip_count\n";
-    }
-
-    // 20s * (1000Hz / decimation) 帧
-    t2_log_max_count_ = 20 * (1000 / walk_step_conf_.decimation);
+    // 40s * (1000Hz / decimation) 帧
+    t2_log_max_count_ = 40 * (1000 / walk_step_conf_.decimation);
     t2_log_count_ = 0;
-    t2_logging_enabled_ = t2_gait_file_.is_open() && t2_joint_file_.is_open() &&
-                          t2_pose_file_.is_open() && t2_action_file_.is_open();
+    t2_logging_enabled_ = true;  // 启用功能，但等待触发
+    t2_logging_triggered_ = false;
 
     // 初始化步态检测辅助变量
     last_contact_state_[0] = false;
@@ -157,53 +119,22 @@ void RLController::Init(const YAML::Node& cfg_node) {
     last_contact_time_[0] = 0.0;
     last_contact_time_[1] = 0.0;
 
-    if (t2_logging_enabled_) {
-      fprintf(stderr, "[RLController] T2 CSV logging started (max %d frames)\n", t2_log_max_count_);
-      fprintf(stderr, "  - T2-2 Gait:   %s\n", gait_path.c_str());
-      fprintf(stderr, "  - T2-3 Joint:  %s\n", joint_path.c_str());
-      fprintf(stderr, "  - T2-4 Pose:   %s\n", pose_path.c_str());
-      fprintf(stderr, "  - T2-5 Action: %s\n", action_path.c_str());
-    }
+    fprintf(stderr, "[RLController] T2 logging enabled (max %d frames, waiting for walk_leg trigger)\n", t2_log_max_count_);
   }
   // ---- T2 日志初始化结束 ----
 
-  // ---- T3 测试 CSV 日志初始化 ----
+  // ---- T3 测试 CSV 日志初始化（触发式，进入 walk_leg 后开始记录） ----
   {
     t3_log_dir_ = "test_logs/data_csv";
     std::filesystem::create_directories(t3_log_dir_);
 
-    auto now = std::chrono::system_clock::now();
-    auto time_t_now = std::chrono::system_clock::to_time_t(now);
-    std::tm tm_now{};
-#ifdef _WIN32
-    localtime_s(&tm_now, &time_t_now);
-#else
-    localtime_r(&time_t_now, &tm_now);
-#endif
-    char time_buf[64];
-    std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
-
-    // T3: 电机电流监测
-    std::string current_path = t3_log_dir_ + "/t3_current_" + std::string(time_buf) + ".csv";
-    t3_current_file_.open(current_path);
-    if (t3_current_file_.is_open()) {
-      t3_current_file_ << "timestamp_ns";
-      for (const auto& name : joint_names_) {
-        t3_current_file_ << ",current_" << name << ",pos_" << name
-                         << ",vel_" << name << ",target_" << name;
-      }
-      t3_current_file_ << "\n";
-    }
-
-    // 30s * (1000Hz / decimation) 帧
-    t3_log_max_count_ = 30 * (1000 / walk_step_conf_.decimation);
+    // 40s * (1000Hz / decimation) 帧
+    t3_log_max_count_ = 40 * (1000 / walk_step_conf_.decimation);
     t3_log_count_ = 0;
-    t3_logging_enabled_ = t3_current_file_.is_open();
+    t3_logging_enabled_ = true;  // 启用功能，但等待触发
+    t3_logging_triggered_ = false;
 
-    if (t3_logging_enabled_) {
-      fprintf(stderr, "[RLController] T3 CSV logging started (max %d frames)\n", t3_log_max_count_);
-      fprintf(stderr, "  - T3 Current: %s\n", current_path.c_str());
-    }
+    fprintf(stderr, "[RLController] T3 logging enabled (max %d frames, waiting for walk_leg trigger)\n", t3_log_max_count_);
   }
   // ---- T3 日志初始化结束 ----
 
@@ -435,7 +366,7 @@ void RLController::UpdateT1Logging() {
     return;
   }
 
-  // 读取最新的传感器数据（独立于 UpdateStateEstimation，因为 zero 模式下 RLController 不是活跃控制器）
+  // ---- 1. 读取最新传感器数据 ----
   vector_t t1_joint_pos(onnx_conf_.actions_size);
   vector_t t1_joint_vel(onnx_conf_.actions_size);
   vector3_t t1_ang_vel;
@@ -461,16 +392,163 @@ void RLController::UpdateT1Logging() {
     t1_euler_xyz = QuatToXyz(quat);
   }
 
-  // 检测进入 zero 模式的上升沿
+  // ---- 2. 检测 zero 模式上升沿，触发记录 ----
   bool zero_entered = zero_mode_entered_.load(std::memory_order_acquire);
 
   if (zero_entered && !t1_logging_triggered_) {
-    // 如果之前有未关闭的文件，先关闭
     if (t1_log_file_.is_open()) {
       t1_log_file_.flush();
       t1_log_file_.close();
       fprintf(stderr, "[RLController] T1 logging restarted (received new zero command)\n");
     }
+
+    // 重置 T1 observation 状态
+    t1_propri_history_buffer_.setZero();
+    t1_last_actions_.setZero();
+    t1_is_first_obs_frame_ = true;
+
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_now{};
+#ifdef _WIN32
+    localtime_s(&tm_now, &time_t_now);
+#else
+    localtime_r(&time_t_now, &tm_now);
+#endif
+    char time_buf[64];
+    std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
+
+    std::string log_path = t1_log_dir_ + "/t1_obs_" + std::string(time_buf) + ".csv";
+    fprintf(stderr, "[RLController] T1 attempting to open file: %s\n", log_path.c_str());
+    t1_log_file_.open(log_path);
+    if (t1_log_file_.is_open()) {
+      // observation 结构（单帧 observations_size 维）：
+      //   [0] sin(2π·phase), [1] cos(2π·phase)
+      //   [2] cmd_vx*scale, [3] cmd_vy*scale, [4] cmd_wz
+      //   [5..5+N-1] (joint_pos-init)*dof_pos_scale
+      //   [5+N..5+2N-1] joint_vel*dof_vel_scale
+      //   [5+2N..5+3N-1] last_actions
+      //   [5+3N..5+3N+2] ang_vel*ang_vel_scale
+      //   [5+3N+3..5+3N+5] euler*quat_scale
+      // 总维度 = observations_size * num_hist
+      int total_obs_dim = onnx_conf_.observations_size * onnx_conf_.num_hist;
+      t1_log_file_ << "timestamp_ns";
+      for (int ii = 0; ii < total_obs_dim; ++ii) {
+        t1_log_file_ << ",obs_" << ii;
+      }
+      t1_log_file_ << "\n";
+
+      t1_logging_triggered_ = true;
+      t1_log_count_ = 0;
+      fprintf(stderr, "[RLController] T1 observation logging triggered (max 40s, dim=%d)\n", total_obs_dim);
+      fprintf(stderr, "  - T1 Obs: %s\n", log_path.c_str());
+    } else {
+      fprintf(stderr, "[RLController] ERROR: Failed to open T1 log file: %s\n", log_path.c_str());
+    }
+  }
+
+  // ---- 3. 如果已触发，计算 observation 并记录 ----
+  if (t1_logging_triggered_ && t1_log_file_.is_open() && t1_log_count_ < t1_log_max_count_) {
+    // 3a. 计算当前帧 observation（与 ComputeObservation 逻辑一致）
+    vector_t propri_obs(onnx_conf_.observations_size);
+    {
+      std::shared_lock<std::shared_mutex> lock(joy_mutex_);
+      double phase = duration<double>(high_resolution_clock::now().time_since_epoch()).count();
+      if (walk_step_conf_.sw_mode) {
+        double cmd_norm = std::sqrt(Square(joy_data_.linear.x) + Square(joy_data_.linear.y) + Square(joy_data_.angular.z));
+        if (cmd_norm <= walk_step_conf_.cmd_threshold) {
+          phase = 0;
+        }
+      }
+      phase = phase / walk_step_conf_.cycle_time;
+
+      // clang-format off
+      propri_obs << sin(2 * M_PI * phase),
+                    cos(2 * M_PI * phase),
+                    joy_data_.linear.x * obs_scales_.lin_vel,
+                    joy_data_.linear.y * obs_scales_.lin_vel,
+                    joy_data_.angular.z,
+                    (t1_joint_pos - joint_conf_.init_state) * obs_scales_.dof_pos,
+                    t1_joint_vel * obs_scales_.dof_vel,
+                    t1_last_actions_,
+                    t1_ang_vel * obs_scales_.ang_vel,
+                    t1_euler_xyz * obs_scales_.quat;
+      // clang-format on
+    }
+
+    // 3b. 首帧初始化历史缓冲区
+    if (t1_is_first_obs_frame_) {
+      for (int ii = 5 + onnx_conf_.actions_size * 2; ii < 5 + onnx_conf_.actions_size * 3; ++ii) {
+        propri_obs(ii, 0) = 0.0;
+      }
+      for (int ii = 0; ii < onnx_conf_.num_hist; ++ii) {
+        t1_propri_history_buffer_.segment(ii * onnx_conf_.observations_size, onnx_conf_.observations_size) = propri_obs.cast<float>();
+      }
+      t1_is_first_obs_frame_ = false;
+    }
+
+    // 3c. 滑动历史窗口
+    t1_propri_history_buffer_.head(t1_propri_history_buffer_.size() - onnx_conf_.observations_size) =
+        t1_propri_history_buffer_.tail(t1_propri_history_buffer_.size() - onnx_conf_.observations_size);
+    t1_propri_history_buffer_.tail(onnx_conf_.observations_size) = propri_obs.cast<float>();
+
+    // 3d. clip
+    int total_obs_dim = onnx_conf_.observations_size * onnx_conf_.num_hist;
+    std::vector<float> t1_obs(total_obs_dim);
+    for (int ii = 0; ii < total_obs_dim; ++ii) {
+      t1_obs[ii] = static_cast<float>(t1_propri_history_buffer_[ii]);
+    }
+    float obs_min_f = static_cast<float>(-onnx_conf_.observations_clip);
+    float obs_max_f = static_cast<float>(onnx_conf_.observations_clip);
+    std::transform(t1_obs.begin(), t1_obs.end(), t1_obs.begin(),
+                   [obs_min_f, obs_max_f](float x) {
+                     return std::max(obs_min_f, std::min(obs_max_f, x));
+                   });
+
+    // 3e. 写入 CSV
+    auto now_ns = duration_cast<nanoseconds>(
+        high_resolution_clock::now().time_since_epoch()).count();
+    t1_log_file_ << now_ns;
+    for (int ii = 0; ii < total_obs_dim; ++ii) {
+      t1_log_file_ << "," << t1_obs[ii];
+    }
+    t1_log_file_ << "\n";
+    t1_log_count_++;
+
+    if (t1_log_count_ % 10000 == 0) {
+      fprintf(stderr, "[RLController] T1 logging progress: %d/%d frames\n", t1_log_count_, t1_log_max_count_);
+    }
+
+    if (t1_log_count_ >= t1_log_max_count_) {
+      t1_log_file_.flush();
+      t1_log_file_.close();
+      t1_logging_triggered_ = false;
+      zero_mode_entered_.store(false, std::memory_order_release);
+      fprintf(stderr, "[RLController] T1 observation logging finished (%d frames, 40s)\n", t1_log_count_);
+    }
+  }
+}
+
+void RLController::LogT2Data() {
+  if (!t2_logging_enabled_) {
+    return;
+  }
+
+  // ---- 检测 walk_leg 模式上升沿，触发记录 ----
+  bool walk_entered = walk_leg_entered_.load(std::memory_order_acquire);
+
+  if (walk_entered && !t2_logging_triggered_) {
+    // 关闭之前未关闭的文件
+    if (t2_gait_file_.is_open()) { t2_gait_file_.flush(); t2_gait_file_.close(); }
+    if (t2_joint_file_.is_open()) { t2_joint_file_.flush(); t2_joint_file_.close(); }
+    if (t2_pose_file_.is_open()) { t2_pose_file_.flush(); t2_pose_file_.close(); }
+    if (t2_action_file_.is_open()) { t2_action_file_.flush(); t2_action_file_.close(); }
+
+    // 重置步态检测辅助变量
+    last_contact_state_[0] = false;
+    last_contact_state_[1] = false;
+    last_contact_time_[0] = 0.0;
+    last_contact_time_[1] = 0.0;
 
     // 创建新的日志文件
     auto now = std::chrono::system_clock::now();
@@ -484,70 +562,55 @@ void RLController::UpdateT1Logging() {
     char time_buf[64];
     std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
 
-    std::string log_path = t1_log_dir_ + "/t1_static_" + std::string(time_buf) + ".csv";
-    fprintf(stderr, "[RLController] T1 attempting to open file: %s\n", log_path.c_str());
-    t1_log_file_.open(log_path);
-    if (t1_log_file_.is_open()) {
-      // 写入表头
-      t1_log_file_ << "timestamp_ns";
+    std::string gait_path = t2_log_dir_ + "/t22_gait_" + std::string(time_buf) + ".csv";
+    t2_gait_file_.open(gait_path);
+    if (t2_gait_file_.is_open()) {
+      t2_gait_file_ << "timestamp_ns,left_contact,right_contact,cycle_time_ms\n";
+    }
+
+    std::string joint_path = t2_log_dir_ + "/t23_joint_" + std::string(time_buf) + ".csv";
+    t2_joint_file_.open(joint_path);
+    if (t2_joint_file_.is_open()) {
+      t2_joint_file_ << "timestamp_ns";
       for (const auto& name : joint_names_) {
-        t1_log_file_ << ",pos_" << name << ",vel_" << name;
+        t2_joint_file_ << ",pos_" << name << ",vel_" << name << ",target_" << name;
       }
-      t1_log_file_ << ",ang_vel_x,ang_vel_y,ang_vel_z";
-      t1_log_file_ << ",euler_x,euler_y,euler_z";
-      t1_log_file_ << "\n";
+      t2_joint_file_ << "\n";
+    }
 
-      // 写入 init_state 参考行
-      t1_log_file_ << "# init_state";
-      for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
-        t1_log_file_ << "," << joint_conf_.init_state(ii) << ",0";
+    std::string pose_path = t2_log_dir_ + "/t24_pose_" + std::string(time_buf) + ".csv";
+    t2_pose_file_.open(pose_path);
+    if (t2_pose_file_.is_open()) {
+      t2_pose_file_ << "timestamp_ns,euler_x,euler_y,euler_z,ang_vel_x,ang_vel_y,ang_vel_z,lin_vel_x,lin_vel_y,lin_vel_z\n";
+    }
+
+    std::string action_path = t2_log_dir_ + "/t25_action_" + std::string(time_buf) + ".csv";
+    t2_action_file_.open(action_path);
+    if (t2_action_file_.is_open()) {
+      t2_action_file_ << "timestamp_ns";
+      for (const auto& name : joint_names_) {
+        t2_action_file_ << ",action_" << name;
       }
-      t1_log_file_ << ",0,0,0,0,0,0\n";
+      t2_action_file_ << ",clip_count\n";
+    }
 
-      t1_logging_triggered_ = true;
-      t1_log_count_ = 0;
-      fprintf(stderr, "[RLController] T1 CSV logging triggered by ZERO mode (max 40s)\n");
-      fprintf(stderr, "  - T1 Static: %s\n", log_path.c_str());
+    bool all_open = t2_gait_file_.is_open() && t2_joint_file_.is_open() &&
+                    t2_pose_file_.is_open() && t2_action_file_.is_open();
+    if (all_open) {
+      t2_logging_triggered_ = true;
+      t2_log_count_ = 0;
+      fprintf(stderr, "[RLController] T2 CSV logging triggered by walk_leg mode (max %d frames)\n", t2_log_max_count_);
+      fprintf(stderr, "  - T2-2 Gait:   %s\n", gait_path.c_str());
+      fprintf(stderr, "  - T2-3 Joint:  %s\n", joint_path.c_str());
+      fprintf(stderr, "  - T2-4 Pose:   %s\n", pose_path.c_str());
+      fprintf(stderr, "  - T2-5 Action: %s\n", action_path.c_str());
     } else {
-      fprintf(stderr, "[RLController] ERROR: Failed to open T1 log file: %s\n", log_path.c_str());
+      fprintf(stderr, "[RLController] ERROR: Failed to open one or more T2 log files\n");
     }
   }
 
-  // 如果已触发且文件打开，记录数据
-  if (t1_logging_triggered_ && t1_log_file_.is_open() && t1_log_count_ < t1_log_max_count_) {
-    auto now_ns = duration_cast<nanoseconds>(
-        high_resolution_clock::now().time_since_epoch()).count();
-    t1_log_file_ << now_ns;
-    for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
-      t1_log_file_ << "," << t1_joint_pos(ii)
-                   << "," << t1_joint_vel(ii);
-    }
-    t1_log_file_ << "," << t1_ang_vel(0)
-                 << "," << t1_ang_vel(1)
-                 << "," << t1_ang_vel(2);
-    t1_log_file_ << "," << t1_euler_xyz(0)
-                 << "," << t1_euler_xyz(1)
-                 << "," << t1_euler_xyz(2);
-    t1_log_file_ << "\n";
-    t1_log_count_++;
-
-    // 每 10000 帧打印一次进度
-    if (t1_log_count_ % 10000 == 0) {
-      fprintf(stderr, "[RLController] T1 logging progress: %d/%d frames\n", t1_log_count_, t1_log_max_count_);
-    }
-
-    if (t1_log_count_ >= t1_log_max_count_) {
-      t1_log_file_.flush();
-      t1_log_file_.close();
-      t1_logging_triggered_ = false;
-      zero_mode_entered_.store(false, std::memory_order_release);
-      fprintf(stderr, "[RLController] T1 CSV logging finished (%d frames, 40s)\n", t1_log_count_);
-    }
-  }
-}
-
-void RLController::LogT2Data() {
-  if (t2_log_count_ >= t2_log_max_count_) {
+  // ---- 如果未触发或已记满，直接返回 ----
+  if (!t2_logging_triggered_ || t2_log_count_ >= t2_log_max_count_) {
     return;
   }
 
@@ -616,6 +679,9 @@ void RLController::LogT2Data() {
   }
 
   t2_log_count_++;
+  if (t2_log_count_ % 5000 == 0) {
+    fprintf(stderr, "[RLController] T2 logging progress: %d/%d frames\n", t2_log_count_, t2_log_max_count_);
+  }
   if (t2_log_count_ >= t2_log_max_count_) {
     t2_gait_file_.flush();
     t2_gait_file_.close();
@@ -625,14 +691,13 @@ void RLController::LogT2Data() {
     t2_pose_file_.close();
     t2_action_file_.flush();
     t2_action_file_.close();
-    t2_logging_enabled_ = false;
-    fprintf(stderr, "[RLController] T2 CSV logging finished (%d frames)\n", t2_log_count_);
+    t2_logging_triggered_ = false;
+    fprintf(stderr, "[RLController] T2 CSV logging finished (%d frames, 40s)\n", t2_log_count_);
   }
 }
 
 bool RLController::DetectFootContact(int foot_idx) {
-  // 简化版：基于踝关节速度判断接触
-  // foot_idx: 0=left, 1=right
+  // ...
   // 真机可能需要:
   // 1. 力传感器数据
   // 2. 足端位置 + 速度阈值
@@ -651,7 +716,49 @@ bool RLController::DetectFootContact(int foot_idx) {
 }
 
 void RLController::LogT3Data() {
-  if (t3_log_count_ >= t3_log_max_count_) {
+  if (!t3_logging_enabled_) {
+    return;
+  }
+
+  // ---- 检测 walk_leg 模式上升沿，触发记录 ----
+  bool walk_entered = walk_leg_entered_.load(std::memory_order_acquire);
+
+  if (walk_entered && !t3_logging_triggered_) {
+    if (t3_current_file_.is_open()) { t3_current_file_.flush(); t3_current_file_.close(); }
+
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_now{};
+#ifdef _WIN32
+    localtime_s(&tm_now, &time_t_now);
+#else
+    localtime_r(&time_t_now, &tm_now);
+#endif
+    char time_buf[64];
+    std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
+
+    std::string current_path = t3_log_dir_ + "/t3_current_" + std::string(time_buf) + ".csv";
+    fprintf(stderr, "[RLController] T3 attempting to open file: %s\n", current_path.c_str());
+    t3_current_file_.open(current_path);
+    if (t3_current_file_.is_open()) {
+      t3_current_file_ << "timestamp_ns";
+      for (const auto& name : joint_names_) {
+        t3_current_file_ << ",current_" << name << ",pos_" << name
+                         << ",vel_" << name << ",target_" << name;
+      }
+      t3_current_file_ << "\n";
+
+      t3_logging_triggered_ = true;
+      t3_log_count_ = 0;
+      fprintf(stderr, "[RLController] T3 CSV logging triggered by walk_leg mode (max %d frames, 40s)\n", t3_log_max_count_);
+      fprintf(stderr, "  - T3 Current: %s\n", current_path.c_str());
+    } else {
+      fprintf(stderr, "[RLController] ERROR: Failed to open T3 log file: %s\n", current_path.c_str());
+    }
+  }
+
+  // ---- 如果未触发或已记满，直接返回 ----
+  if (!t3_logging_triggered_ || t3_log_count_ >= t3_log_max_count_) {
     return;
   }
 
@@ -665,7 +772,6 @@ void RLController::LogT3Data() {
     // 从 joint_state_data_.effort 获取电流/力矩数据
     // 注意：effort 字段可能是力矩(Nm)或电流(A)，取决于硬件接口
     std::shared_lock<std::shared_mutex> lock(joint_state_mutex_);
-
 
     for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
       double current = joint_state_data_.effort[ii];
@@ -683,11 +789,14 @@ void RLController::LogT3Data() {
   }
 
   t3_log_count_++;
+  if (t3_log_count_ % 5000 == 0) {
+    fprintf(stderr, "[RLController] T3 logging progress: %d/%d frames\n", t3_log_count_, t3_log_max_count_);
+  }
   if (t3_log_count_ >= t3_log_max_count_) {
     t3_current_file_.flush();
     t3_current_file_.close();
-    t3_logging_enabled_ = false;
-    fprintf(stderr, "[RLController] T3 CSV logging finished (%d frames)\n", t3_log_count_);
+    t3_logging_triggered_ = false;
+    fprintf(stderr, "[RLController] T3 CSV logging finished (%d frames, 40s)\n", t3_log_count_);
   }
 }
 

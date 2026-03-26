@@ -87,7 +87,7 @@ class RLController : public ControllerBase {
   std::vector<digital_lp_filter<double>> low_pass_filters_;
   std::atomic_bool is_first_frame_{true};
 
-  // T1 静态测试 CSV 日志
+  // T1 静态测试 CSV 日志（记录完整 Observation 向量）
   std::ofstream t1_log_file_;
   bool t1_logging_enabled_{false};
   bool t1_logging_triggered_{false};  // 是否已触发记录
@@ -95,19 +95,26 @@ class RLController : public ControllerBase {
   int t1_log_count_{0};
   int t1_log_max_count_{0};
   std::string t1_log_dir_;
+  // T1 独立的 observation 计算状态（zero 模式下 ComputeObservation 不会被调用）
+  Eigen::Matrix<float, Eigen::Dynamic, 1> t1_propri_history_buffer_;
+  vector_t t1_last_actions_;
+  bool t1_is_first_obs_frame_{true};
   
  public:
   void SetZeroModeEntered(bool entered) { zero_mode_entered_.store(entered, std::memory_order_release); }
+  void SetWalkLegEntered(bool entered) { walk_leg_entered_.store(entered, std::memory_order_release); }
   void UpdateT1Logging();  // 独立的 T1 日志更新，可在非活跃状态下调用
   
  private:
 
-  // T2 测试 CSV 日志
+  // T2 测试 CSV 日志（进入 walk_leg 后触发记录）
   std::ofstream t2_gait_file_;       // T2-2 步态周期
   std::ofstream t2_joint_file_;      // T2-3 关节轨迹
   std::ofstream t2_pose_file_;       // T2-4 机身姿态
   std::ofstream t2_action_file_;     // T2-5 网络输出
   bool t2_logging_enabled_{false};
+  bool t2_logging_triggered_{false};  // 是否已触发记录
+  std::atomic_bool walk_leg_entered_{false};  // walk_leg 模式进入标志（由 ControlModule 设置）
   int t2_log_count_{0};
   int t2_log_max_count_{0};
   std::string t2_log_dir_;
@@ -118,9 +125,10 @@ class RLController : public ControllerBase {
   void LogT2Data();
   bool DetectFootContact(int foot_idx);
 
-  // T3 测试 CSV 日志
+  // T3 测试 CSV 日志（进入 walk_leg 后触发记录）
   std::ofstream t3_current_file_;       // T3 电机电流
   bool t3_logging_enabled_{false};
+  bool t3_logging_triggered_{false};  // 是否已触发记录
   int t3_log_count_{0};
   int t3_log_max_count_{0};
   std::string t3_log_dir_;
