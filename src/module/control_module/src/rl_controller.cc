@@ -662,6 +662,7 @@ void RLController::LogT2Data() {
     t2_action_file_.flush();
     t2_action_file_.close();
     t2_logging_triggered_ = false;
+    walk_leg_entered_.store(false, std::memory_order_release);
     fprintf(stderr, "[RLController] T2 CSV logging finished (%d frames, 40s)\n", t2_log_count_);
   }
 }
@@ -766,6 +767,7 @@ void RLController::LogT3Data() {
     t3_current_file_.flush();
     t3_current_file_.close();
     t3_logging_triggered_ = false;
+    walk_leg_entered_.store(false, std::memory_order_release);
     fprintf(stderr, "[RLController] T3 CSV logging finished (%d frames, 40s)\n", t3_log_count_);
   }
 }
