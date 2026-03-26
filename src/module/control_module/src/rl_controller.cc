@@ -78,27 +78,22 @@ void RLController::Init(const YAML::Node& cfg_node) {
   LoadModel();
   // clang-format on
 
-  // ---- T1 静态测试 CSV 日志初始化 ----
+  // ---- T1 静态测试 CSV 日志初始化（从 obs pipeline 提取，与仿真对比） ----
   {
     t1_log_dir_ = "test_logs/data_csv";
     std::filesystem::create_directories(t1_log_dir_);
 
-    // T1 改为触发式记录，不在初始化时打开文件
+    // T1 触发式记录，不在初始化时打开文件
     t1_log_max_count_ = 40000;  // 40s * 1000Hz
     t1_log_count_ = 0;
-    t1_logging_enabled_ = true;  // 启用功能，但等待触发
+    t1_logging_enabled_ = true;
     t1_logging_triggered_ = false;
 
-    // T1 独立 observation 计算状态初始化
-    t1_propri_history_buffer_.resize(onnx_conf_.observations_size * onnx_conf_.num_hist);
-    t1_propri_history_buffer_.setZero();
-    t1_last_actions_.resize(onnx_conf_.actions_size);
-    t1_last_actions_.setZero();
-    t1_is_first_obs_frame_ = true;
-
-    fprintf(stderr, "[RLController] T1 observation logging enabled (obs_size=%d, num_hist=%d, total=%d, max 40s)\n",
-            onnx_conf_.observations_size, onnx_conf_.num_hist,
-            onnx_conf_.observations_size * onnx_conf_.num_hist);
+    fprintf(stderr, "[RLController] T1 logging enabled (3 CSV files, joints=%d, max 40s @ 1000Hz)\n",
+            onnx_conf_.actions_size);
+    fprintf(stderr, "  - T1-1: joint_pos obs (dof_pos_scale=%.4f)\n", obs_scales_.dof_pos);
+    fprintf(stderr, "  - T1-2: joint_vel obs (dof_vel_scale=%.4f)\n", obs_scales_.dof_vel);
+    fprintf(stderr, "  - T1-3: IMU obs (ang_vel_scale=%.4f, quat_scale=%.4f)\n", obs_scales_.ang_vel, obs_scales_.quat);
   }
   // ---- T1 日志初始化结束 ----
 
@@ -366,7 +361,7 @@ void RLController::UpdateT1Logging() {
     return;
   }
 
-  // ---- 1. 读取最新传感器数据 ----
+  // ---- 1. 读取最新传感器数据（与 obs pipeline 一致的方式） ----
   vector_t t1_joint_pos(onnx_conf_.actions_size);
   vector_t t1_joint_vel(onnx_conf_.actions_size);
   vector3_t t1_ang_vel;
@@ -396,16 +391,11 @@ void RLController::UpdateT1Logging() {
   bool zero_entered = zero_mode_entered_.load(std::memory_order_acquire);
 
   if (zero_entered && !t1_logging_triggered_) {
-    if (t1_log_file_.is_open()) {
-      t1_log_file_.flush();
-      t1_log_file_.close();
-      fprintf(stderr, "[RLController] T1 logging restarted (received new zero command)\n");
-    }
-
-    // 重置 T1 observation 状态
-    t1_propri_history_buffer_.setZero();
-    t1_last_actions_.setZero();
-    t1_is_first_obs_frame_ = true;
+    // 关闭之前未关闭的文件
+    if (t1_joint_pos_file_.is_open()) { t1_joint_pos_file_.flush(); t1_joint_pos_file_.close(); }
+    if (t1_joint_vel_file_.is_open()) { t1_joint_vel_file_.flush(); t1_joint_vel_file_.close(); }
+    if (t1_imu_file_.is_open()) { t1_imu_file_.flush(); t1_imu_file_.close(); }
+    fprintf(stderr, "[RLController] T1 triggered by zero mode entry\n");
 
     auto now = std::chrono::system_clock::now();
     auto time_t_now = std::chrono::system_clock::to_time_t(now);
@@ -418,114 +408,94 @@ void RLController::UpdateT1Logging() {
     char time_buf[64];
     std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
 
-    std::string log_path = t1_log_dir_ + "/t1_obs_" + std::string(time_buf) + ".csv";
-    fprintf(stderr, "[RLController] T1 attempting to open file: %s\n", log_path.c_str());
-    t1_log_file_.open(log_path);
-    if (t1_log_file_.is_open()) {
-      // observation 结构（单帧 observations_size 维）：
-      //   [0] sin(2π·phase), [1] cos(2π·phase)
-      //   [2] cmd_vx*scale, [3] cmd_vy*scale, [4] cmd_wz
-      //   [5..5+N-1] (joint_pos-init)*dof_pos_scale
-      //   [5+N..5+2N-1] joint_vel*dof_vel_scale
-      //   [5+2N..5+3N-1] last_actions
-      //   [5+3N..5+3N+2] ang_vel*ang_vel_scale
-      //   [5+3N+3..5+3N+5] euler*quat_scale
-      // 总维度 = observations_size * num_hist
-      int total_obs_dim = onnx_conf_.observations_size * onnx_conf_.num_hist;
-      t1_log_file_ << "timestamp_ns";
-      for (int ii = 0; ii < total_obs_dim; ++ii) {
-        t1_log_file_ << ",obs_" << ii;
+    // T1-1: 关节零位偏差 = (joint_pos - init_state) * dof_pos_scale
+    std::string pos_path = t1_log_dir_ + "/t11_joint_pos_" + std::string(time_buf) + ".csv";
+    t1_joint_pos_file_.open(pos_path);
+    if (t1_joint_pos_file_.is_open()) {
+      t1_joint_pos_file_ << "timestamp_ns";
+      for (const auto& name : joint_names_) {
+        t1_joint_pos_file_ << ",pos_obs_" << name;
       }
-      t1_log_file_ << "\n";
+      t1_joint_pos_file_ << "\n";
+    }
 
+    // T1-2: 关节速度 = joint_vel * dof_vel_scale
+    std::string vel_path = t1_log_dir_ + "/t12_joint_vel_" + std::string(time_buf) + ".csv";
+    t1_joint_vel_file_.open(vel_path);
+    if (t1_joint_vel_file_.is_open()) {
+      t1_joint_vel_file_ << "timestamp_ns";
+      for (const auto& name : joint_names_) {
+        t1_joint_vel_file_ << ",vel_obs_" << name;
+      }
+      t1_joint_vel_file_ << "\n";
+    }
+
+    // T1-3: IMU = ang_vel * ang_vel_scale + euler * quat_scale
+    std::string imu_path = t1_log_dir_ + "/t13_imu_" + std::string(time_buf) + ".csv";
+    t1_imu_file_.open(imu_path);
+    if (t1_imu_file_.is_open()) {
+      t1_imu_file_ << "timestamp_ns,ang_vel_obs_x,ang_vel_obs_y,ang_vel_obs_z,euler_obs_x,euler_obs_y,euler_obs_z\n";
+    }
+
+    bool all_open = t1_joint_pos_file_.is_open() && t1_joint_vel_file_.is_open() && t1_imu_file_.is_open();
+    if (all_open) {
       t1_logging_triggered_ = true;
       t1_log_count_ = 0;
-      fprintf(stderr, "[RLController] T1 observation logging triggered (max 40s, dim=%d)\n", total_obs_dim);
-      fprintf(stderr, "  - T1 Obs: %s\n", log_path.c_str());
+      fprintf(stderr, "[RLController] T1 CSV logging triggered (3 files, max 40s @ 1000Hz)\n");
+      fprintf(stderr, "  - T1-1 JointPos: %s\n", pos_path.c_str());
+      fprintf(stderr, "  - T1-2 JointVel: %s\n", vel_path.c_str());
+      fprintf(stderr, "  - T1-3 IMU:      %s\n", imu_path.c_str());
     } else {
-      fprintf(stderr, "[RLController] ERROR: Failed to open T1 log file: %s\n", log_path.c_str());
+      fprintf(stderr, "[RLController] ERROR: Failed to open one or more T1 log files\n");
     }
   }
 
-  // ---- 3. 如果已触发，计算 observation 并记录 ----
-  if (t1_logging_triggered_ && t1_log_file_.is_open() && t1_log_count_ < t1_log_max_count_) {
-    // 3a. 计算当前帧 observation（与 ComputeObservation 逻辑一致）
-    vector_t propri_obs(onnx_conf_.observations_size);
-    {
-      std::shared_lock<std::shared_mutex> lock(joy_mutex_);
-      double phase = duration<double>(high_resolution_clock::now().time_since_epoch()).count();
-      if (walk_step_conf_.sw_mode) {
-        double cmd_norm = std::sqrt(Square(joy_data_.linear.x) + Square(joy_data_.linear.y) + Square(joy_data_.angular.z));
-        if (cmd_norm <= walk_step_conf_.cmd_threshold) {
-          phase = 0;
-        }
-      }
-      phase = phase / walk_step_conf_.cycle_time;
+  // ---- 3. 如果已触发，计算 obs pipeline 数据并记录 ----
+  if (!t1_logging_triggered_ || t1_log_count_ >= t1_log_max_count_) {
+    return;
+  }
 
-      // clang-format off
-      propri_obs << sin(2 * M_PI * phase),
-                    cos(2 * M_PI * phase),
-                    joy_data_.linear.x * obs_scales_.lin_vel,
-                    joy_data_.linear.y * obs_scales_.lin_vel,
-                    joy_data_.angular.z,
-                    (t1_joint_pos - joint_conf_.init_state) * obs_scales_.dof_pos,
-                    t1_joint_vel * obs_scales_.dof_vel,
-                    t1_last_actions_,
-                    t1_ang_vel * obs_scales_.ang_vel,
-                    t1_euler_xyz * obs_scales_.quat;
-      // clang-format on
-    }
+  // 计算与 ComputeObservation 中一致的 obs 值（当前帧，无历史）
+  vector_t obs_joint_pos = (t1_joint_pos - joint_conf_.init_state) * obs_scales_.dof_pos;
+  vector_t obs_joint_vel = t1_joint_vel * obs_scales_.dof_vel;
+  vector3_t obs_ang_vel = t1_ang_vel * obs_scales_.ang_vel;
+  vector3_t obs_euler = t1_euler_xyz * obs_scales_.quat;
 
-    // 3b. 首帧初始化历史缓冲区
-    if (t1_is_first_obs_frame_) {
-      for (int ii = 5 + onnx_conf_.actions_size * 2; ii < 5 + onnx_conf_.actions_size * 3; ++ii) {
-        propri_obs(ii, 0) = 0.0;
-      }
-      for (int ii = 0; ii < onnx_conf_.num_hist; ++ii) {
-        t1_propri_history_buffer_.segment(ii * onnx_conf_.observations_size, onnx_conf_.observations_size) = propri_obs.cast<float>();
-      }
-      t1_is_first_obs_frame_ = false;
-    }
+  auto now_ns = duration_cast<nanoseconds>(
+      high_resolution_clock::now().time_since_epoch()).count();
 
-    // 3c. 滑动历史窗口
-    t1_propri_history_buffer_.head(t1_propri_history_buffer_.size() - onnx_conf_.observations_size) =
-        t1_propri_history_buffer_.tail(t1_propri_history_buffer_.size() - onnx_conf_.observations_size);
-    t1_propri_history_buffer_.tail(onnx_conf_.observations_size) = propri_obs.cast<float>();
+  // T1-1: 关节零位偏差
+  t1_joint_pos_file_ << now_ns;
+  for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
+    t1_joint_pos_file_ << "," << obs_joint_pos(ii);
+  }
+  t1_joint_pos_file_ << "\n";
 
-    // 3d. clip
-    int total_obs_dim = onnx_conf_.observations_size * onnx_conf_.num_hist;
-    std::vector<float> t1_obs(total_obs_dim);
-    for (int ii = 0; ii < total_obs_dim; ++ii) {
-      t1_obs[ii] = static_cast<float>(t1_propri_history_buffer_[ii]);
-    }
-    float obs_min_f = static_cast<float>(-onnx_conf_.observations_clip);
-    float obs_max_f = static_cast<float>(onnx_conf_.observations_clip);
-    std::transform(t1_obs.begin(), t1_obs.end(), t1_obs.begin(),
-                   [obs_min_f, obs_max_f](float x) {
-                     return std::max(obs_min_f, std::min(obs_max_f, x));
-                   });
+  // T1-2: 关节速度
+  t1_joint_vel_file_ << now_ns;
+  for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
+    t1_joint_vel_file_ << "," << obs_joint_vel(ii);
+  }
+  t1_joint_vel_file_ << "\n";
 
-    // 3e. 写入 CSV
-    auto now_ns = duration_cast<nanoseconds>(
-        high_resolution_clock::now().time_since_epoch()).count();
-    t1_log_file_ << now_ns;
-    for (int ii = 0; ii < total_obs_dim; ++ii) {
-      t1_log_file_ << "," << t1_obs[ii];
-    }
-    t1_log_file_ << "\n";
-    t1_log_count_++;
+  // T1-3: IMU
+  t1_imu_file_ << now_ns
+               << "," << obs_ang_vel(0) << "," << obs_ang_vel(1) << "," << obs_ang_vel(2)
+               << "," << obs_euler(0) << "," << obs_euler(1) << "," << obs_euler(2)
+               << "\n";
 
-    if (t1_log_count_ % 10000 == 0) {
-      fprintf(stderr, "[RLController] T1 logging progress: %d/%d frames\n", t1_log_count_, t1_log_max_count_);
-    }
+  t1_log_count_++;
+  if (t1_log_count_ % 10000 == 0) {
+    fprintf(stderr, "[RLController] T1 logging progress: %d/%d frames\n", t1_log_count_, t1_log_max_count_);
+  }
 
-    if (t1_log_count_ >= t1_log_max_count_) {
-      t1_log_file_.flush();
-      t1_log_file_.close();
-      t1_logging_triggered_ = false;
-      zero_mode_entered_.store(false, std::memory_order_release);
-      fprintf(stderr, "[RLController] T1 observation logging finished (%d frames, 40s)\n", t1_log_count_);
-    }
+  if (t1_log_count_ >= t1_log_max_count_) {
+    t1_joint_pos_file_.flush(); t1_joint_pos_file_.close();
+    t1_joint_vel_file_.flush(); t1_joint_vel_file_.close();
+    t1_imu_file_.flush(); t1_imu_file_.close();
+    t1_logging_triggered_ = false;
+    zero_mode_entered_.store(false, std::memory_order_release);
+    fprintf(stderr, "[RLController] T1 CSV logging finished (%d frames, 40s)\n", t1_log_count_);
   }
 }
 

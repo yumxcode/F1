@@ -87,18 +87,16 @@ class RLController : public ControllerBase {
   std::vector<digital_lp_filter<double>> low_pass_filters_;
   std::atomic_bool is_first_frame_{true};
 
-  // T1 静态测试 CSV 日志（记录完整 Observation 向量）
-  std::ofstream t1_log_file_;
+  // T1 静态测试 CSV 日志（从 obs pipeline 中提取数据，与仿真对比）
+  std::ofstream t1_joint_pos_file_;   // T1-1: (joint_pos - init_state) * dof_pos_scale
+  std::ofstream t1_joint_vel_file_;   // T1-2: joint_vel * dof_vel_scale
+  std::ofstream t1_imu_file_;         // T1-3: ang_vel * ang_vel_scale + euler * quat_scale
   bool t1_logging_enabled_{false};
   bool t1_logging_triggered_{false};  // 是否已触发记录
   std::atomic_bool zero_mode_entered_{false};  // zero 模式进入标志（由 ControlModule 设置）
   int t1_log_count_{0};
   int t1_log_max_count_{0};
   std::string t1_log_dir_;
-  // T1 独立的 observation 计算状态（zero 模式下 ComputeObservation 不会被调用）
-  Eigen::Matrix<float, Eigen::Dynamic, 1> t1_propri_history_buffer_;
-  vector_t t1_last_actions_;
-  bool t1_is_first_obs_frame_{true};
   
  public:
   void SetZeroModeEntered(bool entered) { zero_mode_entered_.store(entered, std::memory_order_release); }
