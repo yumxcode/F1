@@ -408,7 +408,7 @@ void RLController::UpdateT1Logging() {
     char time_buf[64];
     std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
 
-    // T1-1: 关节零位偏差 = (joint_pos - init_state) * dof_pos_scale
+    // T1-1: 关节零位 = joint_pos * dof_pos_scale（验证真机 zero 位是否为全零）
     std::string pos_path = t1_log_dir_ + "/t11_joint_pos_" + std::string(time_buf) + ".csv";
     t1_joint_pos_file_.open(pos_path);
     if (t1_joint_pos_file_.is_open()) {
@@ -456,7 +456,7 @@ void RLController::UpdateT1Logging() {
   }
 
   // 计算与 ComputeObservation 中一致的 obs 值（当前帧，无历史）
-  vector_t obs_joint_pos = (t1_joint_pos - joint_conf_.init_state) * obs_scales_.dof_pos;
+  vector_t obs_joint_pos = t1_joint_pos * obs_scales_.dof_pos;
   vector_t obs_joint_vel = t1_joint_vel * obs_scales_.dof_vel;
   vector3_t obs_ang_vel = t1_ang_vel * obs_scales_.ang_vel;
   vector3_t obs_euler = t1_euler_xyz * obs_scales_.quat;
