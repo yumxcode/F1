@@ -28,7 +28,7 @@ void LumbarParallelTransmission::TransformActuatorToJoint() {
   // ----
   // yumx : fix bug
   double taum6 = actr_left_.handle->state.effort * actr_left_.direction;
-  // ----
+  // ----x
   
   // vel
   double qdm5 = actr_right_.handle->state.velocity * actr_right_.direction;

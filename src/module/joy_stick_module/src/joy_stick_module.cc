@@ -114,45 +114,53 @@ void JoyStickModule::MainLoop() {
     joy_->GetJoyData(joy_data);
 
     // 初始化 prev_walk_buttons_（首次循环）
-    if (prev_walk_buttons_.empty()) {
+    if (prev_walk_buttons_.size() != joy_data.buttons.size()) {
       prev_walk_buttons_.assign(joy_data.buttons.size(), false);
     }
 
-    for (auto& float_pub : float_pubs_) {
-      bool ret = true;
-      for (auto button : float_pub.buttons) {
-        ret &= joy_data.buttons[button];
-      }
-      if (ret) {
-        aimrt::channel::Publish<std_msgs::msg::Float32>(float_pub.pub, button_msgs);
-      }
-
-      // 检测 /walk_mode 按钮上升沿，切换行走模式
-      if (float_pub.topic_name == "/walk_mode") {
-        bool all_pressed = true;
-        bool all_pressed_prev = true;
+    // 无手柄时跳过按钮相关发布逻辑
+    if (!joy_data.buttons.empty()) {
+      for (auto& float_pub : float_pubs_) {
+        bool ret = true;
         for (auto button : float_pub.buttons) {
-          all_pressed &= static_cast<bool>(joy_data.buttons[button]);
-          all_pressed_prev &= prev_walk_buttons_[button];
+          if (button >= joy_data.buttons.size()) { ret = false; break; }
+          ret &= joy_data.buttons[button];
         }
-        if (all_pressed && !all_pressed_prev) {
-          walk_mode_active_ = !walk_mode_active_;
-          AIMRT_INFO("[JoyStick] Walk mode {}", walk_mode_active_ ? "ACTIVATED" : "DEACTIVATED");
+        if (ret) {
+          aimrt::channel::Publish<std_msgs::msg::Float32>(float_pub.pub, button_msgs);
+        }
+
+        // 检测 /walk_mode 按钮上升沿，切换行走模式
+        if (float_pub.topic_name == "/walk_mode") {
+          bool all_pressed = true;
+          bool all_pressed_prev = true;
+          for (auto button : float_pub.buttons) {
+            if (button >= joy_data.buttons.size() || button >= prev_walk_buttons_.size()) {
+              all_pressed = false; all_pressed_prev = false; break;
+            }
+            all_pressed &= static_cast<bool>(joy_data.buttons[button]);
+            all_pressed_prev &= prev_walk_buttons_[button];
+          }
+          if (all_pressed && !all_pressed_prev) {
+            walk_mode_active_ = !walk_mode_active_;
+            AIMRT_INFO("[JoyStick] Walk mode {}", walk_mode_active_ ? "ACTIVATED" : "DEACTIVATED");
+          }
         }
       }
-    }
 
-    // 更新上一帧按钮状态
-    for (size_t i = 0; i < joy_data.buttons.size(); ++i) {
-      prev_walk_buttons_[i] = static_cast<bool>(joy_data.buttons[i]);
+      // 更新上一帧按钮状态
+      for (size_t i = 0; i < joy_data.buttons.size(); ++i) {
+        prev_walk_buttons_[i] = static_cast<bool>(joy_data.buttons[i]);
+      }
     }
 
     for (auto twist_pub : twist_pubs_) {
       // 行走模式激活时绕过按钮检查，直接发布；否则需按住对应按钮
       bool ret = walk_mode_active_;
       if (!ret) {
-        ret = true;
+        ret = !twist_pub.buttons.empty() && !joy_data.buttons.empty();
         for (auto button : twist_pub.buttons) {
+          if (button >= joy_data.buttons.size()) { ret = false; break; }
           ret &= joy_data.buttons[button];
         }
       }
