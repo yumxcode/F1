@@ -132,6 +132,21 @@ class RLController : public ControllerBase {
   std::string t3_log_dir_;
 
   void LogT3Data();
+
+  // T4 原始传感器数据记录（进入 walk_leg 后触发，记录未缩放的原始数据）
+  std::ofstream t4_raw_joint_pos_file_;   // T4-1: 原始关节位置 (rad)
+  std::ofstream t4_raw_joint_vel_file_;   // T4-2: 原始关节速度 (rad/s)
+  std::ofstream t4_raw_motor_current_file_; // T4-3: 原始电机电流 (A/Nm)
+  std::ofstream t4_raw_imu_quat_file_;    // T4-4: 原始IMU四元数 (w,x,y,z)
+  std::ofstream t4_raw_imu_gyro_file_;    // T4-5: 原始IMU角速度 (rad/s)
+  std::ofstream t4_raw_imu_accel_file_;   // T4-6: 原始IMU加速度 (m/s^2)
+  bool t4_logging_enabled_{false};
+  bool t4_logging_triggered_{false};
+  int t4_log_count_{0};
+  int t4_log_max_count_{0};
+  std::string t4_log_dir_;
+
+  void LogT4RawSensorData();
 };
 
 }  // namespace xyber_x1_infer::rl_control_module

@@ -133,6 +133,21 @@ void RLController::Init(const YAML::Node& cfg_node) {
   }
   // ---- T3 日志初始化结束 ----
 
+  // ---- T4 原始传感器数据 CSV 日志初始化（触发式，进入 walk_leg 后开始记录） ----
+  {
+    t4_log_dir_ = "test_logs/data_csv";
+    std::filesystem::create_directories(t4_log_dir_);
+
+    // 40s * 1000Hz（原始传感器频率，不受 decimation 影响）
+    t4_log_max_count_ = 40 * 1000;
+    t4_log_count_ = 0;
+    t4_logging_enabled_ = true;  // 启用功能，但等待触发
+    t4_logging_triggered_ = false;
+
+    fprintf(stderr, "[RLController] T4 raw sensor logging enabled (6 CSV files, max %d frames @ 1000Hz, waiting for walk_leg trigger)\n", t4_log_max_count_);
+  }
+  // ---- T4 日志初始化结束 ----
+
   propri_.joint_pos.resize(onnx_conf_.actions_size);
   propri_.joint_vel.resize(onnx_conf_.actions_size);
   loop_count_ = 0;
@@ -168,6 +183,12 @@ void RLController::Update() {
       LogT3Data();
     }
   }
+
+  // T4 原始传感器数据记录（每个 MainLoop 周期记录，1000Hz 全频率采样）
+  if (t4_logging_enabled_) {
+    LogT4RawSensorData();
+  }
+
   loop_count_++;
 }
 
@@ -769,6 +790,193 @@ void RLController::LogT3Data() {
     t3_logging_triggered_ = false;
     walk_leg_entered_.store(false, std::memory_order_release);
     fprintf(stderr, "[RLController] T3 CSV logging finished (%d frames, 40s)\n", t3_log_count_);
+  }
+}
+
+void RLController::LogT4RawSensorData() {
+  if (!t4_logging_enabled_) {
+    return;
+  }
+
+  // ---- 检测 walk_leg 模式上升沿，触发记录 ----
+  bool walk_entered = walk_leg_entered_.load(std::memory_order_acquire);
+
+  if (walk_entered && !t4_logging_triggered_) {
+    // 关闭之前未关闭的文件
+    if (t4_raw_joint_pos_file_.is_open()) { t4_raw_joint_pos_file_.flush(); t4_raw_joint_pos_file_.close(); }
+    if (t4_raw_joint_vel_file_.is_open()) { t4_raw_joint_vel_file_.flush(); t4_raw_joint_vel_file_.close(); }
+    if (t4_raw_motor_current_file_.is_open()) { t4_raw_motor_current_file_.flush(); t4_raw_motor_current_file_.close(); }
+    if (t4_raw_imu_quat_file_.is_open()) { t4_raw_imu_quat_file_.flush(); t4_raw_imu_quat_file_.close(); }
+    if (t4_raw_imu_gyro_file_.is_open()) { t4_raw_imu_gyro_file_.flush(); t4_raw_imu_gyro_file_.close(); }
+    if (t4_raw_imu_accel_file_.is_open()) { t4_raw_imu_accel_file_.flush(); t4_raw_imu_accel_file_.close(); }
+
+    // 创建时间戳文件名
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_now{};
+#ifdef _WIN32
+    localtime_s(&tm_now, &time_t_now);
+#else
+    localtime_r(&time_t_now, &tm_now);
+#endif
+    char time_buf[64];
+    std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
+
+    // T4-1: 原始关节位置
+    std::string pos_path = t4_log_dir_ + "/t4_raw_joint_pos_" + std::string(time_buf) + ".csv";
+    t4_raw_joint_pos_file_.open(pos_path);
+    if (t4_raw_joint_pos_file_.is_open()) {
+      t4_raw_joint_pos_file_ << "timestamp_ns";
+      for (const auto& name : joint_names_) {
+        t4_raw_joint_pos_file_ << "," << name;
+      }
+      t4_raw_joint_pos_file_ << "\n";
+    }
+
+    // T4-2: 原始关节速度
+    std::string vel_path = t4_log_dir_ + "/t4_raw_joint_vel_" + std::string(time_buf) + ".csv";
+    t4_raw_joint_vel_file_.open(vel_path);
+    if (t4_raw_joint_vel_file_.is_open()) {
+      t4_raw_joint_vel_file_ << "timestamp_ns";
+      for (const auto& name : joint_names_) {
+        t4_raw_joint_vel_file_ << "," << name;
+      }
+      t4_raw_joint_vel_file_ << "\n";
+    }
+
+    // T4-3: 原始电机电流
+    std::string current_path = t4_log_dir_ + "/t4_raw_motor_current_" + std::string(time_buf) + ".csv";
+    t4_raw_motor_current_file_.open(current_path);
+    if (t4_raw_motor_current_file_.is_open()) {
+      t4_raw_motor_current_file_ << "timestamp_ns";
+      for (const auto& name : joint_names_) {
+        t4_raw_motor_current_file_ << "," << name;
+      }
+      t4_raw_motor_current_file_ << "\n";
+    }
+
+    // T4-4: 原始IMU四元数
+    std::string quat_path = t4_log_dir_ + "/t4_raw_imu_quat_" + std::string(time_buf) + ".csv";
+    t4_raw_imu_quat_file_.open(quat_path);
+    if (t4_raw_imu_quat_file_.is_open()) {
+      t4_raw_imu_quat_file_ << "timestamp_ns,quat_w,quat_x,quat_y,quat_z\n";
+    }
+
+    // T4-5: 原始IMU角速度
+    std::string gyro_path = t4_log_dir_ + "/t4_raw_imu_gyro_" + std::string(time_buf) + ".csv";
+    t4_raw_imu_gyro_file_.open(gyro_path);
+    if (t4_raw_imu_gyro_file_.is_open()) {
+      t4_raw_imu_gyro_file_ << "timestamp_ns,gyro_x,gyro_y,gyro_z\n";
+    }
+
+    // T4-6: 原始IMU加速度
+    std::string accel_path = t4_log_dir_ + "/t4_raw_imu_accel_" + std::string(time_buf) + ".csv";
+    t4_raw_imu_accel_file_.open(accel_path);
+    if (t4_raw_imu_accel_file_.is_open()) {
+      t4_raw_imu_accel_file_ << "timestamp_ns,accel_x,accel_y,accel_z\n";
+    }
+
+    bool all_open = t4_raw_joint_pos_file_.is_open() && t4_raw_joint_vel_file_.is_open() &&
+                    t4_raw_motor_current_file_.is_open() && t4_raw_imu_quat_file_.is_open() &&
+                    t4_raw_imu_gyro_file_.is_open() && t4_raw_imu_accel_file_.is_open();
+    if (all_open) {
+      t4_logging_triggered_ = true;
+      t4_log_count_ = 0;
+      fprintf(stderr, "[RLController] T4 raw sensor CSV logging triggered by walk_leg mode (6 files, max %d frames @ 1000Hz)\n", t4_log_max_count_);
+      fprintf(stderr, "  - T4-1 RawJointPos:     %s\n", pos_path.c_str());
+      fprintf(stderr, "  - T4-2 RawJointVel:     %s\n", vel_path.c_str());
+      fprintf(stderr, "  - T4-3 RawMotorCurrent: %s\n", current_path.c_str());
+      fprintf(stderr, "  - T4-4 RawIMUQuat:      %s\n", quat_path.c_str());
+      fprintf(stderr, "  - T4-5 RawIMUGyro:      %s\n", gyro_path.c_str());
+      fprintf(stderr, "  - T4-6 RawIMUAccel:     %s\n", accel_path.c_str());
+    } else {
+      fprintf(stderr, "[RLController] ERROR: Failed to open one or more T4 log files\n");
+    }
+  }
+
+  // ---- 如果未触发或已记满，直接返回 ----
+  if (!t4_logging_triggered_ || t4_log_count_ >= t4_log_max_count_) {
+    return;
+  }
+
+  auto now_ns = duration_cast<nanoseconds>(
+      high_resolution_clock::now().time_since_epoch()).count();
+
+  // ---- T4-1: 原始关节位置 (rad) ----
+  {
+    std::shared_lock<std::shared_mutex> lock(joint_state_mutex_);
+    t4_raw_joint_pos_file_ << now_ns;
+    for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
+      t4_raw_joint_pos_file_ << "," << joint_state_data_.position[ii];
+    }
+    t4_raw_joint_pos_file_ << "\n";
+  }
+
+  // ---- T4-2: 原始关节速度 (rad/s) ----
+  {
+    std::shared_lock<std::shared_mutex> lock(joint_state_mutex_);
+    t4_raw_joint_vel_file_ << now_ns;
+    for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
+      t4_raw_joint_vel_file_ << "," << joint_state_data_.velocity[ii];
+    }
+    t4_raw_joint_vel_file_ << "\n";
+  }
+
+  // ---- T4-3: 原始电机电流 (A 或 Nm，取决于硬件接口) ----
+  {
+    std::shared_lock<std::shared_mutex> lock(joint_state_mutex_);
+    t4_raw_motor_current_file_ << now_ns;
+    for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
+      t4_raw_motor_current_file_ << "," << joint_state_data_.effort[ii];
+    }
+    t4_raw_motor_current_file_ << "\n";
+  }
+
+  // ---- T4-4: 原始IMU四元数 (w,x,y,z) ----
+  {
+    std::shared_lock<std::shared_mutex> lock(imu_mutex_);
+    t4_raw_imu_quat_file_ << now_ns
+                          << "," << imu_data_.orientation.w
+                          << "," << imu_data_.orientation.x
+                          << "," << imu_data_.orientation.y
+                          << "," << imu_data_.orientation.z
+                          << "\n";
+  }
+
+  // ---- T4-5: 原始IMU角速度 (rad/s) ----
+  {
+    std::shared_lock<std::shared_mutex> lock(imu_mutex_);
+    t4_raw_imu_gyro_file_ << now_ns
+                          << "," << imu_data_.angular_velocity.x
+                          << "," << imu_data_.angular_velocity.y
+                          << "," << imu_data_.angular_velocity.z
+                          << "\n";
+  }
+
+  // ---- T4-6: 原始IMU加速度 (m/s^2) ----
+  {
+    std::shared_lock<std::shared_mutex> lock(imu_mutex_);
+    t4_raw_imu_accel_file_ << now_ns
+                           << "," << imu_data_.linear_acceleration.x
+                           << "," << imu_data_.linear_acceleration.y
+                           << "," << imu_data_.linear_acceleration.z
+                           << "\n";
+  }
+
+  t4_log_count_++;
+  if (t4_log_count_ % 10000 == 0) {
+    fprintf(stderr, "[RLController] T4 raw sensor logging progress: %d/%d frames\n", t4_log_count_, t4_log_max_count_);
+  }
+
+  if (t4_log_count_ >= t4_log_max_count_) {
+    t4_raw_joint_pos_file_.flush(); t4_raw_joint_pos_file_.close();
+    t4_raw_joint_vel_file_.flush(); t4_raw_joint_vel_file_.close();
+    t4_raw_motor_current_file_.flush(); t4_raw_motor_current_file_.close();
+    t4_raw_imu_quat_file_.flush(); t4_raw_imu_quat_file_.close();
+    t4_raw_imu_gyro_file_.flush(); t4_raw_imu_gyro_file_.close();
+    t4_raw_imu_accel_file_.flush(); t4_raw_imu_accel_file_.close();
+    t4_logging_triggered_ = false;
+    fprintf(stderr, "[RLController] T4 raw sensor CSV logging finished (%d frames, 40s @ 1000Hz)\n", t4_log_count_);
   }
 }
 
