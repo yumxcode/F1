@@ -460,7 +460,7 @@ void DcuDriverModule::PublishLoop() {
     imu_msg.header.stamp = stamp;
     pub_imu.Publish(imu_msg);
     // yumx: 打印 IMU 数据（每100帧一次）
-    /*
+    
     static uint64_t imu_print_cnt = 0;
     if (++imu_print_cnt % 100 == 0) {
       AIMRT_INFO("[IMU] quat(w,x,y,z)=({:.3f}, {:.3f}, {:.3f}, {:.3f}) | "
@@ -473,7 +473,7 @@ void DcuDriverModule::PublishLoop() {
                  imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y,
                  imu_msg.linear_acceleration.z);
     }
-    */
+    
     next_loop_time += period;
     std::this_thread::sleep_until(next_loop_time);
   }
