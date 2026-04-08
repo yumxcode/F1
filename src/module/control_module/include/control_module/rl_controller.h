@@ -101,7 +101,12 @@ class RLController : public ControllerBase {
  public:
   void SetZeroModeEntered(bool entered) { zero_mode_entered_.store(entered, std::memory_order_release); }
   void SetWalkLegEntered(bool entered) { walk_leg_entered_.store(entered, std::memory_order_release); }
+  void SetT4RecordRequested(bool requested, const std::string& state_name = "") {
+    t4_trigger_state_ = state_name;
+    t4_record_requested_.store(requested, std::memory_order_release);
+  }
   void UpdateT1Logging();  // 独立的 T1 日志更新，可在非活跃状态下调用
+  void UpdateT4Logging();  // 独立的 T4 原始传感器日志更新，可在非活跃状态下调用（zero/stand/walk_leg 触发）
   
  private:
 
@@ -133,7 +138,7 @@ class RLController : public ControllerBase {
 
   void LogT3Data();
 
-  // T4 原始传感器数据记录（进入 walk_leg 后触发，记录未缩放的原始数据）
+  // T4 原始传感器数据记录（zero/stand/walk_leg 模式触发，记录未缩放的原始数据，40s @ 1000Hz）
   std::ofstream t4_raw_joint_pos_file_;   // T4-1: 原始关节位置 (rad)
   std::ofstream t4_raw_joint_vel_file_;   // T4-2: 原始关节速度 (rad/s)
   std::ofstream t4_raw_motor_current_file_; // T4-3: 原始电机电流 (A/Nm)
@@ -142,6 +147,8 @@ class RLController : public ControllerBase {
   std::ofstream t4_raw_imu_accel_file_;   // T4-6: 原始IMU加速度 (m/s^2)
   bool t4_logging_enabled_{false};
   bool t4_logging_triggered_{false};
+  std::atomic_bool t4_record_requested_{false};  // T4 记录请求标志（由 ControlModule 在 zero/stand/walk_leg 时设置）
+  std::string t4_trigger_state_;  // 触发 T4 记录时的状态名
   int t4_log_count_{0};
   int t4_log_max_count_{0};
   std::string t4_log_dir_;
