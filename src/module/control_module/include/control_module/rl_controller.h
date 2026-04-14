@@ -102,6 +102,9 @@ class RLController : public ControllerBase {
   void SetZeroModeEntered(bool entered) { zero_mode_entered_.store(entered, std::memory_order_release); }
   void SetWalkLegEntered(bool entered) { walk_leg_entered_.store(entered, std::memory_order_release); }
   void SetT4RecordRequested(bool requested, const std::string& state_name = "") {
+    if (requested && t4_trigger_state_ != state_name) {
+      t4_logging_triggered_.store(false, std::memory_order_release);
+    }
     t4_trigger_state_ = state_name;
     t4_record_requested_.store(requested, std::memory_order_release);
   }
@@ -146,7 +149,7 @@ class RLController : public ControllerBase {
   std::ofstream t4_raw_imu_gyro_file_;    // T4-5: 原始IMU角速度 (rad/s)
   std::ofstream t4_raw_imu_accel_file_;   // T4-6: 原始IMU加速度 (m/s^2)
   bool t4_logging_enabled_{false};
-  bool t4_logging_triggered_{false};
+  std::atomic_bool t4_logging_triggered_{false};
   std::atomic_bool t4_record_requested_{false};  // T4 记录请求标志（由 ControlModule 在 zero/stand/walk_leg 时设置）
   std::string t4_trigger_state_;  // 触发 T4 记录时的状态名
   int t4_log_count_{0};
