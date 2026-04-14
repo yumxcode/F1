@@ -63,9 +63,10 @@ class JoyStickModule : public aimrt::ModuleBase {
 
   uint32_t freq_{};
 
-  // 行走模式状态：按一次切换，激活后自动持续发送 /cmd_vel
-  bool walk_mode_active_ = false;
+  // 行走模式状态：订阅 /walk_mode topic 激活，订阅 /idle_mode 或 /zero_mode 停止
+  std::atomic_bool walk_mode_active_ = false;
   std::vector<bool> prev_walk_buttons_;  // 用于上升沿检测
+  std::vector<aimrt::channel::SubscriberRef> subs_;
 };
 
 }  // namespace xyber_x1_infer::joy_stick_module

@@ -68,6 +68,33 @@ bool JoyStickModule::Initialize(aimrt::CoreRef core) {
           twist_pubs_.push_back(std::move(publisher));
         }
       }
+      // 订阅 walk/idle/zero 模式 topic，无手柄时也能切换行走状态
+      {
+        auto walk_cb = [this](const std::shared_ptr<const std_msgs::msg::Float32>&) {
+          walk_mode_active_ = true;
+          AIMRT_INFO("[JoyStick] Walk mode ACTIVATED via topic");
+        };
+        auto walk_sub = core_.GetChannelHandle().GetSubscriber("/walk_mode");
+        aimrt::channel::Subscribe<std_msgs::msg::Float32>(walk_sub, walk_cb);
+        subs_.push_back(walk_sub);
+
+        auto walk2_sub = core_.GetChannelHandle().GetSubscriber("/walk_mode2");
+        aimrt::channel::Subscribe<std_msgs::msg::Float32>(walk2_sub, walk_cb);
+        subs_.push_back(walk2_sub);
+
+        auto stop_cb = [this](const std::shared_ptr<const std_msgs::msg::Float32>&) {
+          walk_mode_active_ = false;
+          AIMRT_INFO("[JoyStick] Walk mode DEACTIVATED via topic");
+        };
+        auto idle_sub = core_.GetChannelHandle().GetSubscriber("/idle_mode");
+        aimrt::channel::Subscribe<std_msgs::msg::Float32>(idle_sub, stop_cb);
+        subs_.push_back(idle_sub);
+
+        auto zero_sub = core_.GetChannelHandle().GetSubscriber("/zero_mode");
+        aimrt::channel::Subscribe<std_msgs::msg::Float32>(zero_sub, stop_cb);
+        subs_.push_back(zero_sub);
+      }
+
       if (cfg_node["rpc_clients"]) {
         for (const auto& rpc : cfg_node["rpc_clients"]) {
           ServiceClient clent;
@@ -113,12 +140,52 @@ void JoyStickModule::MainLoop() {
     ++log_cnt;
     joy_->GetJoyData(joy_data);
 
+    // 检查手柄数据是否有效（SDL 未检测到手柄时 buttons 和 axis 为空）
+    if (joy_data.buttons.empty() || joy_data.axis.empty()) {
+      if (log_cnt % 100 == 0) {
+        AIMRT_WARN("[JoyStick] No joystick detected, buttons={}, axis={}", joy_data.buttons.size(), joy_data.axis.size());
+      }
+      // 无手柄但行走模式已激活：仍然持续发布常量速度
+      if (walk_mode_active_) {
+        for (auto& twist_pub : twist_pubs_) {
+          if (!twist_pub.use_constant_velocity) continue;
+          vel_msgs.linear.x = vel_msgs.linear.y = vel_msgs.linear.z = 0.0;
+          vel_msgs.angular.x = vel_msgs.angular.y = vel_msgs.angular.z = 0.0;
+          auto& cv = twist_pub.constant_velocity;
+          if (cv.count("linear-x"))  vel_msgs.linear.x  = cv.at("linear-x");
+          if (cv.count("linear-y"))  vel_msgs.linear.y  = cv.at("linear-y");
+          if (cv.count("linear-z"))  vel_msgs.linear.z  = cv.at("linear-z");
+          if (cv.count("angular-x")) vel_msgs.angular.x = cv.at("angular-x");
+          if (cv.count("angular-y")) vel_msgs.angular.y = cv.at("angular-y");
+          if (cv.count("angular-z")) vel_msgs.angular.z = cv.at("angular-z");
+          aimrt::channel::Publish<geometry_msgs::msg::Twist>(twist_pub.pub, vel_msgs);
+          if (twist_pub.pub_limiter) {
+            aimrt::channel::Publish<geometry_msgs::msg::Twist>(twist_pub.pub_limiter, vel_msgs);
+          }
+        }
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      continue;
+    }
+
     // 初始化 prev_walk_buttons_（首次循环）
     if (prev_walk_buttons_.empty()) {
       prev_walk_buttons_.assign(joy_data.buttons.size(), false);
     }
 
     for (auto& float_pub : float_pubs_) {
+      // 检查按钮索引是否越界
+      bool valid_buttons = true;
+      for (auto button : float_pub.buttons) {
+        if (button < 0 || static_cast<size_t>(button) >= joy_data.buttons.size()) {
+          valid_buttons = false;
+          break;
+        }
+      }
+      if (!valid_buttons) {
+        continue;
+      }
+
       bool ret = true;
       for (auto button : float_pub.buttons) {
         ret &= joy_data.buttons[button];
@@ -133,7 +200,7 @@ void JoyStickModule::MainLoop() {
         bool all_pressed_prev = true;
         for (auto button : float_pub.buttons) {
           all_pressed &= static_cast<bool>(joy_data.buttons[button]);
-          all_pressed_prev &= prev_walk_buttons_[button];
+          all_pressed_prev &= static_cast<size_t>(button) < prev_walk_buttons_.size() ? prev_walk_buttons_[button] : false;
         }
         if (all_pressed && !all_pressed_prev) {
           walk_mode_active_ = !walk_mode_active_;
@@ -148,6 +215,30 @@ void JoyStickModule::MainLoop() {
     }
 
     for (auto twist_pub : twist_pubs_) {
+      // 检查按钮索引是否越界
+      bool valid_buttons = true;
+      for (auto button : twist_pub.buttons) {
+        if (button < 0 || static_cast<size_t>(button) >= joy_data.buttons.size()) {
+          valid_buttons = false;
+          break;
+        }
+      }
+      if (!valid_buttons) {
+        continue;
+      }
+
+      // 检查轴索引是否越界
+      bool valid_axis = true;
+      for (const auto& [name, idx] : twist_pub.axis) {
+        if (idx < 0 || static_cast<size_t>(idx) >= joy_data.axis.size()) {
+          valid_axis = false;
+          break;
+        }
+      }
+      if (!valid_axis) {
+        continue;
+      }
+
       // 行走模式激活时绕过按钮检查，直接发布；否则需按住对应按钮
       bool ret = walk_mode_active_;
       if (!ret) {
