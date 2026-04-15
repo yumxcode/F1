@@ -154,6 +154,10 @@ void RLController::LoadModel() {
   std::shared_ptr<Ort::Env> onnxEnvPrt(new Ort::Env(ORT_LOGGING_LEVEL_WARNING, "LeggedOnnxController"));
   Ort::SessionOptions sessionOptions;
   sessionOptions.SetInterOpNumThreads(1);
+  // 禁用 LLVM JIT 图优化，避免在 QEMU/仿真环境下因 CPU subtarget 不支持 64-bit
+  // 代码生成而崩溃（"LLVM ERROR: 64-bit code requested on a subtarget that doesn't support it"）
+  // 真机部署时可改回 ORT_ENABLE_ALL 以获得最佳推理性能
+  sessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_BASIC);
   session_ptr_ = std::make_unique<Ort::Session>(*onnxEnvPrt, onnx_conf_.policy_file.c_str(), sessionOptions);
 
   // get input and output info
