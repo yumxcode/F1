@@ -5,6 +5,7 @@ set_root_namespace("xyber_x1_infer")
 add_subdirectory(assistant/native_ros2_channel_publisher)
 add_subdirectory(assistant/native_ros2_rpc_client)
 add_subdirectory(assistant/ros2_utils)
+add_subdirectory(assistant/native_ros2_ankle_identifier)
 
 # protocols
 add_subdirectory(protocols/my_proto)
