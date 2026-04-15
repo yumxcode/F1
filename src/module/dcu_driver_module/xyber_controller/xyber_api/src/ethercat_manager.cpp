@@ -383,7 +383,12 @@ void EthercatManager::ErrorHandler() {
     }
     // check wkc
     if (current_wkc_ < expected_wkc_ || ec_group[0].docheckstate) {
-      LOG_WARN("wkc < expected_wkc , wkc: %d, expected_wkc: %d", current_wkc_, expected_wkc_);
+      if (current_wkc_ < expected_wkc_) {
+        LOG_WARN("wkc below expected, wkc: %d, expected_wkc: %d", current_wkc_, expected_wkc_);
+      } else {
+        LOG_WARN("Slave state check triggered recovery, wkc: %d, expected_wkc: %d", current_wkc_,
+                 expected_wkc_);
+      }
       ec_group[0].docheckstate = FALSE;
       ec_readstate();
       for (const auto& [id, node] : nodes_map_) {

@@ -25,6 +25,8 @@ aimrt:
       - topic_name: "(.*)"
         enable_backends: [local, ros2]
     sub_topics_options:
+      - topic_name: "/joint_cmd"
+        enable_backends: [local, ros2]
       - topic_name: "(.*)"
         enable_backends: [local]
   rpc:
