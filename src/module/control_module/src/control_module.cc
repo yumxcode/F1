@@ -77,21 +77,23 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
                 AIMRT_INFO("[T4 Trigger] Entered STAND mode, T4 logging will start");
               }
 
-              // 检测进入 walk_leg 模式（从非 walk_leg 状态切换到 walk_leg 状态）
-              if (now_state == "walk_leg" && last_state_name_ != "walk_leg") {
-                fprintf(stderr, "[ControlModule] walk_leg mode entered! Triggering T2+T3+T4 logging\n");
+              // 检测进入 walk_leg 模式（仅 stand -> walk_leg 才触发 T_M logging）
+              if (now_state == "walk_leg" && last_state_name_ == "stand") {
+                fprintf(stderr, "[ControlModule] stand -> walk_leg detected! Triggering T_M logging (20s)\n");
                 int rl_count = 0;
                 for (auto& [name, controller] : controller_map_) {
                   auto rl_controller = std::dynamic_pointer_cast<RLController>(controller);
                   if (rl_controller) {
                     rl_controller->SetWalkLegEntered(true);
-                    rl_controller->SetT4RecordRequested(true, "walk_leg");
                     rl_count++;
-                    fprintf(stderr, "[ControlModule] Notified RLController '%s' of walk_leg mode (T2+T3+T4)\n", name.c_str());
+                    fprintf(stderr, "[ControlModule] Notified RLController '%s': T_M logging will start\n", name.c_str());
                   }
                 }
-                fprintf(stderr, "[ControlModule] Notified %d RLController(s) for T2+T3+T4 logging\n", rl_count);
-                AIMRT_INFO("[T2+T3+T4 Trigger] Entered walk_leg mode, T2+T3+T4 logging will start");
+                fprintf(stderr, "[ControlModule] Notified %d RLController(s) for T_M logging\n", rl_count);
+                AIMRT_INFO("[T_M Trigger] stand -> walk_leg, T_M obs+raw logging will start (20s)");
+              } else if (now_state == "walk_leg" && last_state_name_ != "walk_leg") {
+                // 从其他非 stand 状态进入 walk_leg，不触发 T_M logging
+                fprintf(stderr, "[ControlModule] '%s' -> walk_leg (non-stand source), T_M logging NOT triggered\n", last_state_name_.c_str());
               }
 
               // 检测离开 walk_leg 模式（从 walk_leg 切换到其他状态），重置标志允许再次触发

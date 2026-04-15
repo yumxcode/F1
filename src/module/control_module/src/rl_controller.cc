@@ -86,10 +86,10 @@ void RLController::Init(const YAML::Node& cfg_node) {
     // T1 触发式记录，不在初始化时打开文件
     t1_log_max_count_ = 40000;  // 40s * 1000Hz
     t1_log_count_ = 0;
-    t1_logging_enabled_ = true;
+    t1_logging_enabled_ = false;  // [T_M 专项测试] 暂禁用，仅启用 T_M
     t1_logging_triggered_ = false;
 
-    fprintf(stderr, "[RLController] T1 logging enabled (3 CSV files, joints=%d, max 40s @ 1000Hz)\n",
+    fprintf(stderr, "[RLController] T1 logging DISABLED (3 CSV files, joints=%d, max 40s @ 1000Hz)\n",
             onnx_conf_.actions_size);
     fprintf(stderr, "  - T1-1: joint_pos obs (dof_pos_scale=%.4f)\n", obs_scales_.dof_pos);
     fprintf(stderr, "  - T1-2: joint_vel obs (dof_vel_scale=%.4f)\n", obs_scales_.dof_vel);
@@ -105,7 +105,7 @@ void RLController::Init(const YAML::Node& cfg_node) {
     // 40s * (1000Hz / decimation) 帧
     t2_log_max_count_ = 40 * (1000 / walk_step_conf_.decimation);
     t2_log_count_ = 0;
-    t2_logging_enabled_ = true;  // 启用功能，但等待触发
+    t2_logging_enabled_ = false;  // [T_M 专项测试] 暂禁用，仅启用 T_M
     t2_logging_triggered_ = false;
 
     // 初始化步态检测辅助变量
@@ -114,7 +114,7 @@ void RLController::Init(const YAML::Node& cfg_node) {
     last_contact_time_[0] = 0.0;
     last_contact_time_[1] = 0.0;
 
-    fprintf(stderr, "[RLController] T2 logging enabled (max %d frames, waiting for walk_leg trigger)\n", t2_log_max_count_);
+    fprintf(stderr, "[RLController] T2 logging DISABLED (max %d frames, waiting for walk_leg trigger)\n", t2_log_max_count_);
   }
   // ---- T2 日志初始化结束 ----
 
@@ -126,10 +126,10 @@ void RLController::Init(const YAML::Node& cfg_node) {
     // 40s * (1000Hz / decimation) 帧
     t3_log_max_count_ = 40 * (1000 / walk_step_conf_.decimation);
     t3_log_count_ = 0;
-    t3_logging_enabled_ = true;  // 启用功能，但等待触发
+    t3_logging_enabled_ = false;  // [T_M 专项测试] 暂禁用，仅启用 T_M
     t3_logging_triggered_ = false;
 
-    fprintf(stderr, "[RLController] T3 logging enabled (max %d frames, waiting for walk_leg trigger)\n", t3_log_max_count_);
+    fprintf(stderr, "[RLController] T3 logging DISABLED (max %d frames, waiting for walk_leg trigger)\n", t3_log_max_count_);
   }
   // ---- T3 日志初始化结束 ----
 
@@ -141,12 +141,41 @@ void RLController::Init(const YAML::Node& cfg_node) {
     // 40s * 1000Hz（原始传感器频率，不受 decimation 影响）
     t4_log_max_count_ = 40 * 1000;
     t4_log_count_ = 0;
-    t4_logging_enabled_ = true;  // 启用功能，但等待 zero/stand/walk_leg 模式触发
+    t4_logging_enabled_ = false;  // [T_M 专项测试] 暂禁用，仅启用 T_M
     t4_logging_triggered_ = false;
 
-    fprintf(stderr, "[RLController] T4 raw sensor logging enabled (6 CSV files, max %d frames @ 1000Hz, waiting for zero/stand/walk_leg trigger)\n", t4_log_max_count_);
+    fprintf(stderr, "[RLController] T4 raw sensor logging DISABLED (6 CSV files, max %d frames @ 1000Hz, waiting for zero/stand/walk_leg trigger)\n", t4_log_max_count_);
   }
   // ---- T4 日志初始化结束 ----
+
+  // ---- T_M (Step 1) 观测向量日志初始化（walk_leg 触发，binary float32，20s） ----
+  {
+    tm_log_dir_ = "test_logs/data_csv/t_m";
+    std::filesystem::create_directories(tm_log_dir_);
+
+    // 20s × 策略频率（1000Hz / decimation）
+    tm_log_max_count_ = 20 * (1000 / walk_step_conf_.decimation);
+    tm_log_count_ = 0;
+    tm_logging_enabled_ = true;
+    tm_logging_triggered_ = false;
+    tm_obs_bin_file_ = nullptr;
+
+    int obs_total = onnx_conf_.observations_size * onnx_conf_.num_hist;
+    double est_mb = obs_total * sizeof(float) * tm_log_max_count_ / 1e6;
+    fprintf(stderr, "[RLController] T_M logging enabled (binary obs, %d floats/frame, max %d frames @ %dHz, est. %.1f MB, dir: %s)\n",
+            obs_total, tm_log_max_count_, 1000 / walk_step_conf_.decimation, est_mb, tm_log_dir_.c_str());
+  }
+  // ---- T_M 日志初始化结束 ----
+
+  // ---- T_M 同步原始传感器日志初始化（walk_leg 触发，20s @ 1000Hz，CSV，与 t26 obs 同窗口，用于 Step 3） ----
+  {
+    // 目录复用 tm_log_dir_，与 t26 obs binary 文件存于同一目录
+    tm_raw_log_max_count_ = 20 * 1000;  // 20s @ 1000Hz = 20000 帧
+    tm_raw_log_count_ = 0;
+    tm_raw_logging_triggered_ = false;
+    fprintf(stderr, "[RLController] T_M raw sensor sync logging enabled (6 CSV, 20s @ 1000Hz, dir: %s)\n", tm_log_dir_.c_str());
+  }
+  // ---- T_M 原始传感器日志初始化结束 ----
 
   propri_.joint_pos.resize(onnx_conf_.actions_size);
   propri_.joint_vel.resize(onnx_conf_.actions_size);
@@ -181,6 +210,11 @@ void RLController::Update() {
     // T3 数据采集（仅在 decimation 周期记录，与策略同频）
     if (t3_logging_enabled_) {
       LogT3Data();
+    }
+
+    // T_M Step 1: 网络输入观测向量记录（在 ComputeActions 调用后，observations_ 已填充完毕）
+    if (tm_logging_enabled_) {
+      LogTmData();
     }
   }
 
@@ -988,6 +1022,199 @@ void RLController::UpdateT4Logging() {
   if (t4_logging_enabled_) {
     LogT4RawSensorData();
   }
+  LogTmRawSensorData();
 }
 
-} // namespace xyber_x1_infer::
+void RLController::LogTmData() {
+  if (!tm_logging_enabled_) {
+    return;
+  }
+
+  // ---- 检测 walk_leg 模式上升沿，触发记录 ----
+  bool walk_entered = walk_leg_entered_.load(std::memory_order_acquire);
+
+  if (walk_entered && !tm_logging_triggered_) {
+    if (tm_obs_bin_file_) { fflush(tm_obs_bin_file_); fclose(tm_obs_bin_file_); tm_obs_bin_file_ = nullptr; }
+
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_now{};
+#ifdef _WIN32
+    localtime_s(&tm_now, &time_t_now);
+#else
+    localtime_r(&time_t_now, &tm_now);
+#endif
+    char time_buf[64];
+    std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
+
+    std::string bin_path = tm_log_dir_ + "/tm_obs_input_" + std::string(time_buf) + ".bin";
+    tm_obs_bin_file_ = fopen(bin_path.c_str(), "wb");
+
+    if (tm_obs_bin_file_) {
+      tm_logging_triggered_ = true;
+      tm_log_count_ = 0;
+      int obs_total = onnx_conf_.observations_size * onnx_conf_.num_hist;
+      double est_mb = obs_total * sizeof(float) * tm_log_max_count_ / 1e6;
+      fprintf(stderr, "[RLController] T_M binary obs logging triggered: %s\n", bin_path.c_str());
+      fprintf(stderr, "  - obs_size=%d floats/frame, max %d frames (20s), est. %.1f MB\n",
+              obs_total, tm_log_max_count_, est_mb);
+    } else {
+      fprintf(stderr, "[RLController] ERROR: Failed to open T_M binary log file: %s\n", bin_path.c_str());
+    }
+  }
+
+  // ---- 如果未触发或已记满，直接返回 ----
+  if (!tm_logging_triggered_ || tm_log_count_ >= tm_log_max_count_) {
+    return;
+  }
+
+  // ---- 写入当前帧的 observations_ 向量（binary float32，每帧固定字节数） ----
+  fwrite(observations_.data(), sizeof(float), observations_.size(), tm_obs_bin_file_);
+
+  tm_log_count_++;
+  if (tm_log_count_ % 500 == 0) {
+    double elapsed_sec = tm_log_count_ * walk_step_conf_.decimation / 1000.0;
+    fprintf(stderr, "[RLController] T_M logging progress: %d/%d frames (%.1fs / 20s)\n",
+            tm_log_count_, tm_log_max_count_, elapsed_sec);
+  }
+
+  if (tm_log_count_ >= tm_log_max_count_) {
+    fflush(tm_obs_bin_file_);
+    fclose(tm_obs_bin_file_);
+    tm_obs_bin_file_ = nullptr;
+    tm_logging_triggered_ = false;
+    double actual_mb = observations_.size() * sizeof(float) * tm_log_count_ / 1e6;
+    fprintf(stderr, "[RLController] T_M binary obs logging finished (%d frames, 20s, %.1f MB)\n",
+            tm_log_count_, actual_mb);
+  }
+}
+
+void RLController::LogTmRawSensorData() {
+  // ---- 检测 walk_leg 模式上升沿，触发记录 ----
+  bool walk_entered = walk_leg_entered_.load(std::memory_order_acquire);
+
+  if (walk_entered && !tm_raw_logging_triggered_) {
+    if (tm_raw_joint_pos_file_.is_open())     { tm_raw_joint_pos_file_.flush();     tm_raw_joint_pos_file_.close(); }
+    if (tm_raw_joint_vel_file_.is_open())     { tm_raw_joint_vel_file_.flush();     tm_raw_joint_vel_file_.close(); }
+    if (tm_raw_motor_current_file_.is_open()) { tm_raw_motor_current_file_.flush(); tm_raw_motor_current_file_.close(); }
+    if (tm_raw_imu_quat_file_.is_open())      { tm_raw_imu_quat_file_.flush();      tm_raw_imu_quat_file_.close(); }
+    if (tm_raw_imu_gyro_file_.is_open())      { tm_raw_imu_gyro_file_.flush();      tm_raw_imu_gyro_file_.close(); }
+    if (tm_raw_imu_accel_file_.is_open())     { tm_raw_imu_accel_file_.flush();     tm_raw_imu_accel_file_.close(); }
+
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_now{};
+#ifdef _WIN32
+    localtime_s(&tm_now, &time_t_now);
+#else
+    localtime_r(&time_t_now, &tm_now);
+#endif
+    char time_buf[64];
+    std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
+
+    std::string pos_path  = tm_log_dir_ + "/tm_raw_joint_pos_"     + time_buf + ".csv";
+    std::string vel_path  = tm_log_dir_ + "/tm_raw_joint_vel_"     + time_buf + ".csv";
+    std::string cur_path  = tm_log_dir_ + "/tm_raw_motor_current_" + time_buf + ".csv";
+    std::string quat_path = tm_log_dir_ + "/tm_raw_imu_quat_"      + time_buf + ".csv";
+    std::string gyro_path = tm_log_dir_ + "/tm_raw_imu_gyro_"      + time_buf + ".csv";
+    std::string accel_path= tm_log_dir_ + "/tm_raw_imu_accel_"     + time_buf + ".csv";
+
+    tm_raw_joint_pos_file_.open(pos_path);
+    if (tm_raw_joint_pos_file_.is_open()) {
+      tm_raw_joint_pos_file_ << "timestamp_ns";
+      for (const auto& name : joint_names_) { tm_raw_joint_pos_file_ << "," << name; }
+      tm_raw_joint_pos_file_ << "\n";
+    }
+    tm_raw_joint_vel_file_.open(vel_path);
+    if (tm_raw_joint_vel_file_.is_open()) {
+      tm_raw_joint_vel_file_ << "timestamp_ns";
+      for (const auto& name : joint_names_) { tm_raw_joint_vel_file_ << "," << name; }
+      tm_raw_joint_vel_file_ << "\n";
+    }
+    tm_raw_motor_current_file_.open(cur_path);
+    if (tm_raw_motor_current_file_.is_open()) {
+      tm_raw_motor_current_file_ << "timestamp_ns";
+      for (const auto& name : joint_names_) { tm_raw_motor_current_file_ << "," << name; }
+      tm_raw_motor_current_file_ << "\n";
+    }
+    tm_raw_imu_quat_file_.open(quat_path);
+    if (tm_raw_imu_quat_file_.is_open()) { tm_raw_imu_quat_file_ << "timestamp_ns,quat_w,quat_x,quat_y,quat_z\n"; }
+    tm_raw_imu_gyro_file_.open(gyro_path);
+    if (tm_raw_imu_gyro_file_.is_open()) { tm_raw_imu_gyro_file_ << "timestamp_ns,gyro_x,gyro_y,gyro_z\n"; }
+    tm_raw_imu_accel_file_.open(accel_path);
+    if (tm_raw_imu_accel_file_.is_open()) { tm_raw_imu_accel_file_ << "timestamp_ns,accel_x,accel_y,accel_z\n"; }
+
+    bool all_open = tm_raw_joint_pos_file_.is_open() && tm_raw_joint_vel_file_.is_open() &&
+                    tm_raw_motor_current_file_.is_open() && tm_raw_imu_quat_file_.is_open() &&
+                    tm_raw_imu_gyro_file_.is_open() && tm_raw_imu_accel_file_.is_open();
+    if (all_open) {
+      tm_raw_logging_triggered_ = true;
+      tm_raw_log_count_ = 0;
+      fprintf(stderr, "[RLController] T_M raw sensor sync logging triggered (6 CSV, 20s @ 1000Hz)\n");
+      fprintf(stderr, "  - %s\n", pos_path.c_str());
+      fprintf(stderr, "  - %s\n", vel_path.c_str());
+      fprintf(stderr, "  - %s\n", cur_path.c_str());
+      fprintf(stderr, "  - %s\n", quat_path.c_str());
+      fprintf(stderr, "  - %s\n", gyro_path.c_str());
+      fprintf(stderr, "  - %s\n", accel_path.c_str());
+    } else {
+      fprintf(stderr, "[RLController] ERROR: Failed to open one or more T_M raw sensor files\n");
+    }
+  }
+
+  if (!tm_raw_logging_triggered_ || tm_raw_log_count_ >= tm_raw_log_max_count_) {
+    return;
+  }
+
+  auto now_ns = duration_cast<nanoseconds>(high_resolution_clock::now().time_since_epoch()).count();
+
+  {
+    std::shared_lock<std::shared_mutex> lock(joint_state_mutex_);
+    tm_raw_joint_pos_file_ << now_ns;
+    tm_raw_joint_vel_file_ << now_ns;
+    tm_raw_motor_current_file_ << now_ns;
+    for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
+      tm_raw_joint_pos_file_     << "," << joint_state_data_.position[ii];
+      tm_raw_joint_vel_file_     << "," << joint_state_data_.velocity[ii];
+      tm_raw_motor_current_file_ << "," << joint_state_data_.effort[ii];
+    }
+    tm_raw_joint_pos_file_ << "\n";
+    tm_raw_joint_vel_file_ << "\n";
+    tm_raw_motor_current_file_ << "\n";
+  }
+  {
+    std::shared_lock<std::shared_mutex> lock(imu_mutex_);
+    tm_raw_imu_quat_file_ << now_ns
+                          << "," << imu_data_.orientation.w
+                          << "," << imu_data_.orientation.x
+                          << "," << imu_data_.orientation.y
+                          << "," << imu_data_.orientation.z << "\n";
+    tm_raw_imu_gyro_file_ << now_ns
+                          << "," << imu_data_.angular_velocity.x
+                          << "," << imu_data_.angular_velocity.y
+                          << "," << imu_data_.angular_velocity.z << "\n";
+    tm_raw_imu_accel_file_ << now_ns
+                           << "," << imu_data_.linear_acceleration.x
+                           << "," << imu_data_.linear_acceleration.y
+                           << "," << imu_data_.linear_acceleration.z << "\n";
+  }
+
+  tm_raw_log_count_++;
+  if (tm_raw_log_count_ % 5000 == 0) {
+    fprintf(stderr, "[RLController] T_M raw sensor logging progress: %d/%d frames (%.1fs / 20s)\n",
+            tm_raw_log_count_, tm_raw_log_max_count_, tm_raw_log_count_ / 1000.0);
+  }
+  if (tm_raw_log_count_ >= tm_raw_log_max_count_) {
+    tm_raw_joint_pos_file_.flush();     tm_raw_joint_pos_file_.close();
+    tm_raw_joint_vel_file_.flush();     tm_raw_joint_vel_file_.close();
+    tm_raw_motor_current_file_.flush(); tm_raw_motor_current_file_.close();
+    tm_raw_imu_quat_file_.flush();      tm_raw_imu_quat_file_.close();
+    tm_raw_imu_gyro_file_.flush();      tm_raw_imu_gyro_file_.close();
+    tm_raw_imu_accel_file_.flush();     tm_raw_imu_accel_file_.close();
+    tm_raw_logging_triggered_ = false;
+    fprintf(stderr, "[RLController] T_M raw sensor sync logging finished (%d frames, 20s @ 1000Hz)\n",
+            tm_raw_log_count_);
+  }
+}
+
+}  // namespace xyber_x1_infer::rl_control_module

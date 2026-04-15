@@ -157,6 +157,29 @@ class RLController : public ControllerBase {
   std::string t4_log_dir_;
 
   void LogT4RawSensorData();
+
+  // T_M (Step 1) 网络输入观测向量记录 (binary float32, walk_leg 触发, 20s)
+  FILE* tm_obs_bin_file_{nullptr};
+  bool tm_logging_enabled_{false};
+  bool tm_logging_triggered_{false};
+  int tm_log_count_{0};
+  int tm_log_max_count_{0};
+  std::string tm_log_dir_;
+
+  void LogTmData();
+
+  // T_M 同步原始传感器记录（walk_leg 触发，20s @ 1000Hz，CSV，与 t26 obs 时间窗口对齐，用于 Step 3）
+  std::ofstream tm_raw_joint_pos_file_;
+  std::ofstream tm_raw_joint_vel_file_;
+  std::ofstream tm_raw_motor_current_file_;
+  std::ofstream tm_raw_imu_quat_file_;
+  std::ofstream tm_raw_imu_gyro_file_;
+  std::ofstream tm_raw_imu_accel_file_;
+  bool tm_raw_logging_triggered_{false};
+  int  tm_raw_log_count_{0};
+  int  tm_raw_log_max_count_{0};
+
+  void LogTmRawSensorData();
 };
 
 }  // namespace xyber_x1_infer::rl_control_module
