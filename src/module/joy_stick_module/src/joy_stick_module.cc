@@ -71,8 +71,9 @@ bool JoyStickModule::Initialize(aimrt::CoreRef core) {
       // 订阅 walk/idle/zero 模式 topic，无手柄时也能切换行走状态
       {
         auto walk_cb = [this](const std::shared_ptr<const std_msgs::msg::Float32>&) {
-          walk_mode_active_ = true;
-          AIMRT_INFO("[JoyStick] Walk mode ACTIVATED via topic");
+          if (!walk_mode_active_.exchange(true)) {
+            AIMRT_INFO("[JoyStick] Walk mode ACTIVATED via topic");
+          }
         };
         auto walk_sub = core_.GetChannelHandle().GetSubscriber("/walk_mode");
         aimrt::channel::Subscribe<std_msgs::msg::Float32>(walk_sub, walk_cb);

@@ -33,8 +33,10 @@ aimrt:
       - topic_name: "(.*)"
         enable_backends: [local, ros2]
     sub_topics_options: # 为 subscribe topic 选择后端
+      - topic_name: "/(imu|joint_states|joint_cmd).*"
+        enable_backends: [local]          # 内部仿真数据只走 local，避免重复接收
       - topic_name: "(.*)"
-        enable_backends: [local, ros2]
+        enable_backends: [local, ros2]    # 外部控制命令走 local + ros2
   rpc: # rpc相关配置
     backends: # rpc后端配置
       - type: local

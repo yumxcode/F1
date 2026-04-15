@@ -180,6 +180,14 @@ class RLController : public ControllerBase {
   int  tm_raw_log_max_count_{0};
 
   void LogTmRawSensorData();
+
+  // T_M25: ONNX action 输出记录 (CSV, walk_leg 触发, 20s @ 策略频率, 保存至 t_m/)
+  std::ofstream tm25_action_file_;
+  bool tm25_logging_triggered_{false};
+  int  tm25_log_count_{0};
+  int  tm25_log_max_count_{0};
+
+  void LogTm25Data();
 };
 
 }  // namespace xyber_x1_infer::rl_control_module

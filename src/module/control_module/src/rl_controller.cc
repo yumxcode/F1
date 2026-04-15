@@ -177,6 +177,16 @@ void RLController::Init(const YAML::Node& cfg_node) {
   }
   // ---- T_M 原始传感器日志初始化结束 ----
 
+  // ---- T_M25 action 日志初始化（walk_leg 触发，20s @ 策略频率，CSV，保存至 t_m/） ----
+  {
+    tm25_log_max_count_ = 20 * (1000 / walk_step_conf_.decimation);
+    tm25_log_count_ = 0;
+    tm25_logging_triggered_ = false;
+    fprintf(stderr, "[RLController] T_M25 action logging enabled (CSV, max %d frames @ %dHz, dir: %s)\n",
+            tm25_log_max_count_, 1000 / walk_step_conf_.decimation, tm_log_dir_.c_str());
+  }
+  // ---- T_M25 日志初始化结束 ----
+
   propri_.joint_pos.resize(onnx_conf_.actions_size);
   propri_.joint_vel.resize(onnx_conf_.actions_size);
   loop_count_ = 0;
@@ -216,6 +226,9 @@ void RLController::Update() {
     if (tm_logging_enabled_) {
       LogTmData();
     }
+
+    // T_M25: ONNX action 输出记录（与 T_M obs 同窗口，20s @ 策略频率）
+    LogTm25Data();
   }
 
   loop_count_++;
@@ -1083,6 +1096,7 @@ void RLController::LogTmData() {
     fclose(tm_obs_bin_file_);
     tm_obs_bin_file_ = nullptr;
     tm_logging_triggered_ = false;
+    walk_leg_entered_.store(false, std::memory_order_release);  // 重置，防止立即重新触发
     double actual_mb = observations_.size() * sizeof(float) * tm_log_count_ / 1e6;
     fprintf(stderr, "[RLController] T_M binary obs logging finished (%d frames, 20s, %.1f MB)\n",
             tm_log_count_, actual_mb);
@@ -1212,8 +1226,75 @@ void RLController::LogTmRawSensorData() {
     tm_raw_imu_gyro_file_.flush();      tm_raw_imu_gyro_file_.close();
     tm_raw_imu_accel_file_.flush();     tm_raw_imu_accel_file_.close();
     tm_raw_logging_triggered_ = false;
+    walk_leg_entered_.store(false, std::memory_order_release);  // 重置，防止立即重新触发
     fprintf(stderr, "[RLController] T_M raw sensor sync logging finished (%d frames, 20s @ 1000Hz)\n",
             tm_raw_log_count_);
+  }
+}
+
+void RLController::LogTm25Data() {
+  bool walk_entered = walk_leg_entered_.load(std::memory_order_acquire);
+
+  if (walk_entered && !tm25_logging_triggered_) {
+    if (tm25_action_file_.is_open()) { tm25_action_file_.flush(); tm25_action_file_.close(); }
+
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_now{};
+#ifdef _WIN32
+    localtime_s(&tm_now, &time_t_now);
+#else
+    localtime_r(&time_t_now, &tm_now);
+#endif
+    char time_buf[64];
+    std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
+
+    std::string action_path = tm_log_dir_ + "/TM_25_" + std::string(time_buf) + ".csv";
+    tm25_action_file_.open(action_path);
+    if (tm25_action_file_.is_open()) {
+      tm25_action_file_ << "timestamp_ns";
+      for (const auto& name : joint_names_) {
+        tm25_action_file_ << ",action_" << name;
+      }
+      tm25_action_file_ << ",clip_count\n";
+      tm25_logging_triggered_ = true;
+      tm25_log_count_ = 0;
+      fprintf(stderr, "[RLController] T_M25 action logging triggered: %s\n", action_path.c_str());
+      fprintf(stderr, "  - %d joints, max %d frames (20s)\n", onnx_conf_.actions_size, tm25_log_max_count_);
+    } else {
+      fprintf(stderr, "[RLController] ERROR: Failed to open T_M25 action file: %s\n", action_path.c_str());
+    }
+  }
+
+  if (!tm25_logging_triggered_ || tm25_log_count_ >= tm25_log_max_count_) {
+    return;
+  }
+
+  auto now_ns = duration_cast<nanoseconds>(
+      high_resolution_clock::now().time_since_epoch()).count();
+
+  int clip_count = 0;
+  tm25_action_file_ << now_ns;
+  for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
+    tm25_action_file_ << "," << actions_[ii];
+    if (std::abs(actions_[ii]) >= onnx_conf_.actions_clip - 1e-6) {
+      clip_count++;
+    }
+  }
+  tm25_action_file_ << "," << clip_count << "\n";
+
+  tm25_log_count_++;
+  if (tm25_log_count_ % 500 == 0) {
+    double elapsed_sec = tm25_log_count_ * walk_step_conf_.decimation / 1000.0;
+    fprintf(stderr, "[RLController] T_M25 progress: %d/%d frames (%.1fs / 20s)\n",
+            tm25_log_count_, tm25_log_max_count_, elapsed_sec);
+  }
+
+  if (tm25_log_count_ >= tm25_log_max_count_) {
+    tm25_action_file_.flush();
+    tm25_action_file_.close();
+    tm25_logging_triggered_ = false;
+    fprintf(stderr, "[RLController] T_M25 action logging finished (%d frames, 20s)\n", tm25_log_count_);
   }
 }
 
