@@ -19,6 +19,7 @@
 - 驱动-only 配置：[x1_cfg_identifier.yaml](/Users/yumx/code/X1/agibot_x1_infer/src/install/linux/bin/cfg/x1_cfg_identifier.yaml:1)
 - 驱动-only 启动脚本：[run_identifier.sh](/Users/yumx/code/X1/agibot_x1_infer/src/install/linux/bin/run_identifier.sh:1)
 - 辨识节点：[native_ros2_ankle_identifier](/Users/yumx/code/X1/agibot_x1_infer/src/assistant/native_ros2_ankle_identifier/main.cc:1)
+- CSV 分析脚本：[analyze_ankle_identifier_csv.py](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/analyze_ankle_identifier_csv.py:1)
 
 ## 辨识原则
 
@@ -132,6 +133,19 @@ cd build
 - 节点按设定轮次完成后自动退出
 - CSV 自动写入指定路径
 - 出现明显异响、持续振荡、明显耦合摆动时立即停止
+
+6. 分析 CSV
+
+```bash
+python3 .oma/sim2real/analyze_ankle_identifier_csv.py /tmp/left_pitch_step.csv
+```
+
+脚本会输出：
+- 样本数和阶段分布
+- 主测试关节和耦合关节名称
+- 链路是否真正打通
+- `step` 模式下的主方向响应、耦合响应、稳态误差、峰值 effort
+- `sine` 模式下的主方向幅值、耦合幅值、增益、耦合比
 
 ## 需要记录的数据
 
