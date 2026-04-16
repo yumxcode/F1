@@ -65,7 +65,7 @@ class NativeRos2AnkleIdentifier : public rclcpp::Node {
     declare_parameter<std::string>("mode", "step");
     declare_parameter<std::string>("test_side", "left");
     declare_parameter<std::string>("test_axis", "pitch");
-    declare_parameter<double>("publish_rate_hz", 200.0);
+    declare_parameter<double>("publish_rate_hz", 1000.0);
     declare_parameter<double>("pre_hold_sec", 2.0);
     declare_parameter<double>("active_sec", 1.0);
     declare_parameter<double>("post_hold_sec", 2.0);
@@ -299,7 +299,7 @@ class NativeRos2AnkleIdentifier : public rclcpp::Node {
   std::string coupled_joint_;
   std::string csv_path_;
 
-  double publish_rate_hz_ = 200.0;
+  double publish_rate_hz_ = 1000.0;
   double pre_hold_sec_ = 2.0;
   double active_sec_ = 1.0;
   double post_hold_sec_ = 2.0;

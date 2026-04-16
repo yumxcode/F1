@@ -42,29 +42,6 @@ static constexpr double l_p3p4 = 0.14;
 
 namespace xyber_x1_infer::dcu_driver_module {
 
-namespace {
-
-inline int ClampLookupIndex(double value, double min_value, double resolution, int grid_count,
-                            double& lerp) {
-  const double normalized = (value - min_value) / resolution;
-  int index = static_cast<int>(normalized);
-  lerp = normalized - index;
-
-  if (index < 0) {
-    index = 0;
-    lerp = 0.0;
-  } else if (index >= grid_count - 1) {
-    index = grid_count - 2;
-    lerp = 1.0;
-  } else {
-    lerp = std::clamp(lerp, 0.0, 1.0);
-  }
-
-  return index;
-}
-
-}  // namespace
-
 std::unordered_map<std::string, std::vector<double>>
     AnkleParallelTransmission::actuator_to_joint_data_;
 
@@ -106,15 +83,19 @@ void LeftAnkleParallelTransmission::TransformActuatorToJoint() {
   qm5 *= -1;
   qm6 *= -1;
 
-  constexpr int kQm5GridCount = static_cast<int>(QM5_ANGLE_NUM);
-  constexpr int kQm6GridCount = static_cast<int>(QM6_ANGLE_NUM);
+  int qm5_num_int = (int)((qm5 - QM5_ANGLE_MIN) / QM5_RESOLUTION_RATIO);
+  int qm6_num_int = (int)((qm6 - QM6_ANGLE_MIN) / QM6_RESOLUTION_RATIO);
 
-  double qm5_lerp = 0.0;
-  double qm6_lerp = 0.0;
-  int qm5_num_int =
-      ClampLookupIndex(qm5, QM5_ANGLE_MIN, QM5_RESOLUTION_RATIO, kQm5GridCount, qm5_lerp);
-  int qm6_num_int =
-      ClampLookupIndex(qm6, QM6_ANGLE_MIN, QM6_RESOLUTION_RATIO, kQm6GridCount, qm6_lerp);
+  double qmLss_5_num_double = (double)((qm5 - QM5_ANGLE_MIN) / QM5_RESOLUTION_RATIO);
+  double qmLss_6_num_double = (double)((qm6 - QM6_ANGLE_MIN) / QM6_RESOLUTION_RATIO);
+
+  if (qm5_num_int < 0) {
+    std::cout << "qm5_num_int is error" << std::endl;
+  }
+
+  if (qm6_num_int < 0) {
+    std::cout << "qm6_num_int is error" << std::endl;
+  }
 
   std::string param1 = "qm5qm6_" + std::to_string(qm5_num_int + 1);
   param1 += "_" + std::to_string(qm6_num_int + 1);
@@ -125,10 +106,16 @@ void LeftAnkleParallelTransmission::TransformActuatorToJoint() {
   auto iter1 = actuator_to_joint_data_.find(param1);
   auto iter2 = actuator_to_joint_data_.find(param2);
 
+  double qm5_lerp = qmLss_5_num_double - qm5_num_int;
+  double qm6_lerp = qmLss_6_num_double - qm6_num_int;
+  double lerp = std::sqrt((pow(qm5_lerp, 2) + pow(qm6_lerp, 2)) / 2);
+
   double q5 = 0;
   double q6 = 0;
 
   if (iter1 != actuator_to_joint_data_.end() && iter2 != actuator_to_joint_data_.end()) {
+    lerp = std::clamp(lerp, 0.0, 1.0);
+
     q5 =
         qm5_lerp * (actuator_to_joint_data_[param2].at(0) - actuator_to_joint_data_[param1].at(0)) +
         actuator_to_joint_data_[param1].at(0);
@@ -136,11 +123,7 @@ void LeftAnkleParallelTransmission::TransformActuatorToJoint() {
         qm6_lerp * (actuator_to_joint_data_[param2].at(1) - actuator_to_joint_data_[param1].at(1)) +
         actuator_to_joint_data_[param1].at(1);
   } else {
-    static uint64_t warn_count = 0;
-    if (++warn_count % 1000 == 1) {
-      std::cout << "actuator_to_joint_data_ out of range, qm5=" << qm5 << ", qm6=" << qm6
-                << ", key1=" << param1 << ", key2=" << param2 << std::endl;
-    }
+    std::cout << "actuator_to_joint_data_ out of range" << std::endl;
   }
 
   q6 *= -1;
@@ -459,15 +442,19 @@ void RightAnkleParallelTransmission::TransformActuatorToJoint() {
   double qm5 = actr_left_.handle->state.position * actr_left_.direction;
   double qm6 = actr_right_.handle->state.position * actr_right_.direction;
 
-  constexpr int kQm5GridCount = static_cast<int>(QM5_ANGLE_NUM);
-  constexpr int kQm6GridCount = static_cast<int>(QM6_ANGLE_NUM);
+  int qm5_num_int = (int)((qm5 - QM5_ANGLE_MIN) / QM5_RESOLUTION_RATIO);
+  int qm6_num_int = (int)((qm6 - QM6_ANGLE_MIN) / QM6_RESOLUTION_RATIO);
 
-  double qm5_lerp = 0.0;
-  double qm6_lerp = 0.0;
-  int qm5_num_int =
-      ClampLookupIndex(qm5, QM5_ANGLE_MIN, QM5_RESOLUTION_RATIO, kQm5GridCount, qm5_lerp);
-  int qm6_num_int =
-      ClampLookupIndex(qm6, QM6_ANGLE_MIN, QM6_RESOLUTION_RATIO, kQm6GridCount, qm6_lerp);
+  double qmLss_5_num_double = (double)((qm5 - QM5_ANGLE_MIN) / QM5_RESOLUTION_RATIO);
+  double qmLss_6_num_double = (double)((qm6 - QM6_ANGLE_MIN) / QM6_RESOLUTION_RATIO);
+
+  if (qm5_num_int < 0) {
+    std::cout << "qm5_num_int is error" << std::endl;
+  }
+
+  if (qm6_num_int < 0) {
+    std::cout << "qm6_num_int is error" << std::endl;
+  }
 
   std::string param1 = "qm5qm6_" + std::to_string(qm5_num_int + 1);
   param1 += "_" + std::to_string(qm6_num_int + 1);
@@ -478,10 +465,16 @@ void RightAnkleParallelTransmission::TransformActuatorToJoint() {
   auto iter1 = actuator_to_joint_data_.find(param1);
   auto iter2 = actuator_to_joint_data_.find(param2);
 
+  double qm5_lerp = qmLss_5_num_double - qm5_num_int;
+  double qm6_lerp = qmLss_6_num_double - qm6_num_int;
+  double lerp = std::sqrt((pow(qm5_lerp, 2) + pow(qm6_lerp, 2)) / 2);
+
   double q5 = 0;
   double q6 = 0;
 
   if (iter1 != actuator_to_joint_data_.end() && iter2 != actuator_to_joint_data_.end()) {
+    lerp = std::clamp(lerp, 0.0, 1.0);
+
     q5 =
         qm5_lerp * (actuator_to_joint_data_[param2].at(0) - actuator_to_joint_data_[param1].at(0)) +
         actuator_to_joint_data_[param1].at(0);
@@ -489,11 +482,7 @@ void RightAnkleParallelTransmission::TransformActuatorToJoint() {
         qm6_lerp * (actuator_to_joint_data_[param2].at(1) - actuator_to_joint_data_[param1].at(1)) +
         actuator_to_joint_data_[param1].at(1);
   } else {
-    static uint64_t warn_count = 0;
-    if (++warn_count % 1000 == 1) {
-      std::cout << "actuator_to_joint_data_ out of range, qm5=" << qm5 << ", qm6=" << qm6
-                << ", key1=" << param1 << ", key2=" << param2 << std::endl;
-    }
+    std::cout << "actuator_to_joint_data_ out of range" << std::endl;
   }
 
   // torque

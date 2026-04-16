@@ -79,6 +79,7 @@ cd build
   -p mode:=step \
   -p test_side:=left \
   -p test_axis:=pitch \
+  -p publish_rate_hz:=1000.0 \
   -p step_amplitude_rad:=0.005 \
   -p pre_hold_sec:=2.0 \
   -p active_sec:=1.0 \
@@ -98,6 +99,7 @@ cd build
   -p mode:=step \
   -p test_side:=left \
   -p test_axis:=roll \
+  -p publish_rate_hz:=1000.0 \
   -p step_amplitude_rad:=0.005 \
   -p pre_hold_sec:=2.0 \
   -p active_sec:=1.0 \
@@ -117,6 +119,7 @@ cd build
   -p mode:=sine \
   -p test_side:=left \
   -p test_axis:=pitch \
+  -p publish_rate_hz:=1000.0 \
   -p sine_amplitude_rad:=0.004 \
   -p sine_frequency_hz:=1.0 \
   -p pre_hold_sec:=2.0 \
@@ -146,6 +149,10 @@ python3 .oma/sim2real/analyze_ankle_identifier_csv.py /tmp/left_pitch_step.csv
 - 链路是否真正打通
 - `step` 模式下的主方向响应、耦合响应、稳态误差、峰值 effort
 - `sine` 模式下的主方向幅值、耦合幅值、增益、耦合比
+
+注意：
+- 示例命令统一显式传入 `-p publish_rate_hz:=1000.0`，与当前部署控制频率对齐。
+- 如果现场临时降到更低频率做安全验证，结果文件里必须明确记录该频率，避免和正式辨识数据混用。
 
 ## 需要记录的数据
 
