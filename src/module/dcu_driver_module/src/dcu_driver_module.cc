@@ -64,7 +64,9 @@ bool DcuDriverModule::Initialize(aimrt::CoreRef core) {
 
 bool DcuDriverModule::Start() {
   is_running_ = true;
+  AIMRT_INFO("DcuDriverModule::Start enter, publish_frequecy={}", publish_frequecy_);
   publish_thread_ = std::thread(&DcuDriverModule::PublishLoop, this);
+  AIMRT_INFO("DcuDriverModule::Start publish thread launched");
 
   return true;
 }
@@ -355,6 +357,7 @@ bool DcuDriverModule::InitTransmission(YAML::Node& cfg_node) {
 }
 
 void DcuDriverModule::PublishLoop() {
+  AIMRT_INFO("PublishLoop started");
   // create publish proxy
   aimrt::channel::PublisherProxy<sensor_msgs::msg::Imu> pub_imu(pub_imu_);
   aimrt::channel::PublisherProxy<sensor_msgs::msg::JointState> pub_joint_state(pub_joint_state_);
@@ -389,6 +392,7 @@ void DcuDriverModule::PublishLoop() {
 
   auto period = std::chrono::nanoseconds((uint64_t)(1 / publish_frequecy_ * 1000000000));
   auto next_loop_time = std::chrono::steady_clock::now();
+  uint64_t loop_count = 0;
   while (is_running_) {
     // get time
     timeval now;
@@ -459,6 +463,10 @@ void DcuDriverModule::PublishLoop() {
     imu_msg.orientation.z = imu.quat[3];
     imu_msg.header.stamp = stamp;
     pub_imu.Publish(imu_msg);
+    if (++loop_count % 1000 == 0) {
+      AIMRT_INFO("PublishLoop heartbeat count={}, joint0={}, imu_w={}", loop_count,
+                 js_msg.position.empty() ? 0.0 : js_msg.position[0], imu_msg.orientation.w);
+    }
     // yumx: 打印 IMU 数据（每100帧一次）
     /*
     static uint64_t imu_print_cnt = 0;
@@ -477,6 +485,8 @@ void DcuDriverModule::PublishLoop() {
     next_loop_time += period;
     std::this_thread::sleep_until(next_loop_time);
   }
+
+  AIMRT_INFO("PublishLoop exited");
 }
 
 void DcuDriverModule::JointCmdCallback(
