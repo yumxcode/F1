@@ -23,4 +23,4 @@ hold_kd: 1.0
 
 use_imu: true
 auto_stop_after_test: true
-csv_path: /tmp/left_pitch_step.csv
+csv_path: ./log/left_pitch_step.csv
