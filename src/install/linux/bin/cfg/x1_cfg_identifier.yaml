@@ -31,8 +31,8 @@ aimrt:
       - topic_name: "(.*)"
         enable_backends: [local, ros2]
     sub_topics_options:
-      - topic_name: "/joint_cmd"
-        enable_backends: [local, ros2]
+      - topic_name: "(.*)"
+        enable_backends: [local]
   rpc:
     backends:
       - type: local
@@ -48,7 +48,11 @@ aimrt:
       - path: ./libpkg1.so
         enable_modules:
           - DcuDriverModule
+          - AnkleIdentifierModule
     modules:
       - name: DcuDriverModule
         log_lvl: DEBUG
         cfg_file_path: ./cfg/dcu_driver_module/dcu_x1.yaml
+      - name: AnkleIdentifierModule
+        log_lvl: INFO
+        cfg_file_path: ./cfg/ankle_identifier_module/ankle_identifier.yaml

@@ -24,6 +24,7 @@ target_link_libraries(
   ${CUR_TARGET_NAME}
   PRIVATE aimrt::interface::aimrt_pkg_c_interface
           ${CUR_SUPERIOR_NAMESPACE}::dcu_driver_module
+          ${CUR_SUPERIOR_NAMESPACE}::ankle_identifier_module
           ${CUR_SUPERIOR_NAMESPACE}::joy_stick_module
           ${CUR_SUPERIOR_NAMESPACE}::control_module
           ${CUR_SUPERIOR_NAMESPACE}::sim_module)

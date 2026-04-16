@@ -1,6 +1,7 @@
 #include <cstring>
 
 #include "aimrt_pkg_c_interface/pkg_macro.h"
+#include "ankle_identifier_module/ankle_identifier_module.h"
 #include "dcu_driver_module/dcu_driver_module.h"
 #include "joy_stick_module/joy_stick_module.h"
 #include "control_module/control_module.h"
@@ -11,6 +12,10 @@ static std::tuple<std::string_view, std::function<aimrt::ModuleBase*()>>
         {"DcuDriverModule",
          []() -> aimrt::ModuleBase* {
            return new xyber_x1_infer::dcu_driver_module::DcuDriverModule();
+         }},
+        {"AnkleIdentifierModule",
+         []() -> aimrt::ModuleBase* {
+           return new xyber_x1_infer::ankle_identifier_module::AnkleIdentifierModule();
          }},
         {"JoyStickModule",
          []() -> aimrt::ModuleBase* {
