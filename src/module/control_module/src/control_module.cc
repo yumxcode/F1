@@ -39,18 +39,70 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
                 controller_map_[name]->RestartController();
               }
               AIMRT_INFO("Trigger event: [{}] -> {}", trigger_topic, now_state);
+              fprintf(stderr, "[ControlModule] State changed: '%s' -> '%s' (trigger: %s)\n",
+                      last_state_name_.c_str(), now_state.c_str(), trigger_topic.c_str());
               
               // 检测进入 zero 模式（从非 zero 状态切换到 zero 状态）
               if (now_state == "zero" && last_state_name_ != "zero") {
                 zero_mode_entered_.store(true, std::memory_order_release);
+                fprintf(stderr, "[ControlModule] ZERO mode entered! Setting zero_mode_entered=true\n");
                 // 通知所有 RLController 进入 zero 模式
+                int rl_count = 0;
                 for (auto& [name, controller] : controller_map_) {
                   auto rl_controller = std::dynamic_pointer_cast<RLController>(controller);
                   if (rl_controller) {
                     rl_controller->SetZeroModeEntered(true);
+                    rl_controller->SetT4RecordRequested(true, "zero");
+                    rl_count++;
+                    fprintf(stderr, "[ControlModule] Notified RLController '%s' of ZERO mode (T1+T4)\n", name.c_str());
                   }
                 }
-                AIMRT_INFO("[T1 Trigger] Entered ZERO mode, T1/T1-4 logging will start");
+                fprintf(stderr, "[ControlModule] Notified %d RLController(s) total\n", rl_count);
+                AIMRT_INFO("[T1+T4 Trigger] Entered ZERO mode, T1+T4 logging will start");
+              }
+
+              // 检测进入 stand 模式（从非 stand 状态切换到 stand 状态）
+              if (now_state == "stand" && last_state_name_ != "stand") {
+                fprintf(stderr, "[ControlModule] STAND mode entered! Triggering T4 logging\n");
+                int rl_count = 0;
+                for (auto& [name, controller] : controller_map_) {
+                  auto rl_controller = std::dynamic_pointer_cast<RLController>(controller);
+                  if (rl_controller) {
+                    rl_controller->SetT4RecordRequested(true, "stand");
+                    rl_count++;
+                    fprintf(stderr, "[ControlModule] Notified RLController '%s' of STAND mode (T4)\n", name.c_str());
+                  }
+                }
+                fprintf(stderr, "[ControlModule] Notified %d RLController(s) for T4 logging\n", rl_count);
+                AIMRT_INFO("[T4 Trigger] Entered STAND mode, T4 logging will start");
+              }
+
+              // 检测进入 walk_leg 模式（从非 walk_leg 状态切换到 walk_leg 状态）
+              if (now_state == "walk_leg" && last_state_name_ != "walk_leg") {
+                fprintf(stderr, "[ControlModule] walk_leg mode entered! Triggering T2+T3+T4 logging\n");
+                int rl_count = 0;
+                for (auto& [name, controller] : controller_map_) {
+                  auto rl_controller = std::dynamic_pointer_cast<RLController>(controller);
+                  if (rl_controller) {
+                    rl_controller->SetWalkLegEntered(true);
+                    rl_controller->SetT4RecordRequested(true, "walk_leg");
+                    rl_count++;
+                    fprintf(stderr, "[ControlModule] Notified RLController '%s' of walk_leg mode (T2+T3+T4)\n", name.c_str());
+                  }
+                }
+                fprintf(stderr, "[ControlModule] Notified %d RLController(s) for T2+T3+T4 logging\n", rl_count);
+                AIMRT_INFO("[T2+T3+T4 Trigger] Entered walk_leg mode, T2+T3+T4 logging will start");
+              }
+
+              // 检测离开 walk_leg 模式（从 walk_leg 切换到其他状态），重置标志允许再次触发
+              if (last_state_name_ == "walk_leg" && now_state != "walk_leg") {
+                fprintf(stderr, "[ControlModule] Left walk_leg mode -> '%s', resetting walk_leg_entered flag\n", now_state.c_str());
+                for (auto& [name, controller] : controller_map_) {
+                  auto rl_controller = std::dynamic_pointer_cast<RLController>(controller);
+                  if (rl_controller) {
+                    rl_controller->SetWalkLegEntered(false);
+                  }
+                }
               }
               last_state_name_ = now_state;
             }
@@ -110,9 +162,9 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       subs_.push_back(core_.GetChannelHandle().GetSubscriber(cfg_node["sub_imu_data_name"].as<std::string>()));
       ret &= aimrt::channel::Subscribe<sensor_msgs::msg::Imu>(subs_.back(), 
         [this](const std::shared_ptr<const sensor_msgs::msg::Imu>& msg) {
-          auto controller_names = state_machine_.GetCurrentControllerNames();
-          for (const auto& name : controller_names) {
-            controller_map_[name]->SetImuData(*msg);
+          // IMU 数据转发给所有控制器（T1 日志在非活跃状态下也需要 IMU 数据）
+          for (const auto& controller : controller_map_) {
+            controller.second->SetImuData(*msg);
           }
         });
 
@@ -135,11 +187,6 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
           for (const auto& controller : controller_map_) {
             controller.second->SetJointStateData(temp_msg, joint_state_index_map_);
           }
-
-          // T1-4: 记录 JointState 接收时间戳
-          last_joint_state_recv_ns_.store(
-              duration_cast<nanoseconds>(high_resolution_clock::now().time_since_epoch()).count(),
-              std::memory_order_relaxed);
         });
       AIMRT_CHECK_ERROR_THROW(ret, "Subscribe failed.");
 
@@ -148,21 +195,6 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       executor_ = core_.GetExecutorManager().GetExecutor("rl_control_pub_thread");
       AIMRT_CHECK_ERROR_THROW(executor_, "Can not get executor 'rl_control_pub_thread'.");
       aimrt::channel::RegisterPublishType<my_ros2_proto::msg::JointCommand>(joint_cmd_pub_);
-
-      // ---- T1-4 延迟测试 CSV 日志初始化 ----
-      {
-        t14_log_dir_ = "test_logs/data_csv";
-        std::filesystem::create_directories(t14_log_dir_);
-
-        // T1-4 改为触发式记录，不在初始化时打开文件
-        t14_log_max_count_ = 40 * freq_;  // 40s
-        t14_log_count_ = 0;
-        t14_logging_enabled_ = true;  // 启用功能，但等待触发
-        t14_logging_triggered_ = false;
-
-        fprintf(stderr, "[ControlModule] T1-4 delay logging enabled (waiting for trigger, max 40s)\n");
-      }
-      // ---- T1-4 日志初始化结束 ----
     }
   } catch (const std::exception& e) {
     AIMRT_ERROR("Init failed, {}", e.what());
@@ -222,56 +254,21 @@ bool ControlModule::MainLoop() {
       }
       aimrt::channel::Publish<my_ros2_proto::msg::JointCommand>(joint_cmd_pub_, cmd_msg);
 
-      // ---- T1-4 延迟数据采集（进入 zero 模式触发） ----
-      if (t14_logging_enabled_) {
-        // 检测进入 zero 模式的上升沿
-        bool zero_entered = zero_mode_entered_.load(std::memory_order_acquire);
-        
-        if (zero_entered && !t14_logging_triggered_) {
-          // 创建新的日志文件
-          auto now = std::chrono::system_clock::now();
-          auto time_t_now = std::chrono::system_clock::to_time_t(now);
-          std::tm tm_now{};
-#ifdef _WIN32
-          localtime_s(&tm_now, &time_t_now);
-#else
-          localtime_r(&time_t_now, &tm_now);
-#endif
-          char time_buf[64];
-          std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
-          
-          std::string log_path = t14_log_dir_ + "/t14_delay_" + std::string(time_buf) + ".csv";
-          t14_log_file_.open(log_path);
-          if (t14_log_file_.is_open()) {
-            t14_log_file_ << "timestamp_ns,recv_ns,send_ns,round_trip_ms\n";
-            t14_logging_triggered_ = true;
-            t14_log_count_ = 0;
-            fprintf(stderr, "[ControlModule] T1-4 delay logging triggered by ZERO mode (max 40s)\n");
-            fprintf(stderr, "  - T1-4 Delay: %s\n", log_path.c_str());
-          }
-        }
-        
-        // 如果已触发且文件打开，记录数据
-        if (t14_logging_triggered_ && t14_log_file_.is_open() && t14_log_count_ < t14_log_max_count_) {
-          auto send_ns = duration_cast<nanoseconds>(
-              high_resolution_clock::now().time_since_epoch()).count();
-          auto recv_ns = last_joint_state_recv_ns_.load(std::memory_order_relaxed);
-          double round_trip_ms = (send_ns - recv_ns) / 1e6;
-
-          t14_log_file_ << send_ns << "," << recv_ns << "," << send_ns
-                        << "," << round_trip_ms << "\n";
-          t14_log_count_++;
-
-          if (t14_log_count_ >= t14_log_max_count_) {
-            t14_log_file_.flush();
-            t14_log_file_.close();
-            t14_logging_triggered_ = false;
-            zero_mode_entered_.store(false, std::memory_order_release);  // 重置标志
-            fprintf(stderr, "[ControlModule] T1-4 delay logging finished (%d frames, 40s)\n", t14_log_count_);
-          }
+      // ---- T1 静态测试：始终调用所有 RLController 的 T1 日志更新（不依赖活跃状态） ----
+      for (auto& [name, controller] : controller_map_) {
+        auto rl_controller = std::dynamic_pointer_cast<RLController>(controller);
+        if (rl_controller) {
+          rl_controller->UpdateT1Logging();
         }
       }
-      // ---- T1-4 数据采集结束 ----
+
+      // ---- T4 原始传感器数据记录：始终调用所有 RLController 的 T4 日志更新（zero 模式触发，不依赖活跃状态） ----
+      for (auto& [name, controller] : controller_map_) {
+        auto rl_controller = std::dynamic_pointer_cast<RLController>(controller);
+        if (rl_controller) {
+          rl_controller->UpdateT4Logging();
+        }
+      }
     }
     AIMRT_INFO("Exit MainLoop.");
   } catch (const std::exception& e) {
