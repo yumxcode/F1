@@ -1,5 +1,5 @@
 # Get the current folder name
-string(REGEX REPLACE ".*/\\(.*\\)" "\\1" CUR_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+string(REGEX REPLACE ".*/(.*)" "\\1" CUR_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Get namespace
 get_namespace(CUR_SUPERIOR_NAMESPACE)
