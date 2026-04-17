@@ -1,12 +1,13 @@
 # Round 2 踝关节 Kp/Kd 辨识结果
 
-轮次目标：在真机接触工况下完成踝关节 `kp/kd` 闭环辨识，先收敛 `left_ankle_pitch_joint` 和 `left_ankle_roll_joint` 的候选参数，再继续 `right pitch/right roll`。
+轮次目标：在真机接触工况下完成踝关节 `kp/kd` 闭环辨识，先收敛 `left/right` 两侧已完成自由度的候选参数，再继续剩余自由度。
 
 ## 测试范围
 
 - 测试对象：
   - `left_ankle_pitch_joint`
   - `left_ankle_roll_joint`
+  - `right_ankle_pitch_joint`
 - 接触条件：
   - 早期数据包含“脚未完全着地”工况，仅用于确认信号链路与大致趋势
   - 最终结论以“脚完全着地”工况为准
@@ -30,6 +31,8 @@
 | `left roll` | `kp=80, kd=0.8` | 脚完全着地 | `actual_step ≈ 0.007145`，`peak_time_sec ≈ 0.035329`，无超调、无过零、无振荡 | 当前采用的综合候选 |
 | `left roll` | `kp=90, kd=0.8` | 脚完全着地 | `actual_step ≈ 0.006259`，`coupled_motion ≈ -0.001950` | 劣于 `80/0.8` |
 | `left roll` | `kp=100, kd=0.8` | 脚完全着地 | 两次结果分别 `actual_step ≈ 0.004599` 与 `0.003863` | 明显劣于 `80/0.8`，排除 |
+| `right pitch` | `kp=100, kd=0.8` | 脚完全着地 | `actual_step ≈ 0.011267`，`steady_error ≈ 0.000114`，无超调、无过零、无振荡 | 当前综合最优候选 |
+| `right pitch` | `kp=105, kd=0.8` | 脚完全着地 | `actual_step ≈ 0.009831`，耦合略小但主轴跟踪下降 | 不优于 `100/0.8` |
 
 ## 本轮结论
 
@@ -59,15 +62,22 @@
   2. `kp=70, kd=0.8`
   3. `kp=90, kd=0.8`
   4. `kp=100, kd=0.8`
+- `right_ankle_pitch_joint` 在“脚完全着地”工况下也已完成一轮局部收敛。
+- 当前候选参数定为：
+  - `right ankle pitch: kp=100, kd=0.8`
+- `right pitch` 在 `kp=100 -> 105` 扫描中同样未出现超调、过零或衰减振荡，因此当前没有证据支持优先增加 `kd`。
+- 现阶段对 `right pitch` 的排序为：
+  1. `kp=100, kd=0.8`
+  2. `kp=105, kd=0.8`
 
 ## 后续动作
 
 - 维持 `left pitch` 候选值 `kp=100, kd=0.8`
 - 维持 `left roll` 候选值 `kp=80, kd=0.8`
+- 维持 `right pitch` 候选值 `kp=100, kd=0.8`
 - 不再继续扫描更高 `kp`
 - 暂不调整 `kd`
 - 继续进入：
-  - `right_ankle_pitch_joint`
   - `right_ankle_roll_joint`
 - 待四个自由度都完成后，再判断：
   - 是否采用 `pitch/roll` 分轴参数
