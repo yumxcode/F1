@@ -66,6 +66,26 @@
 | `right roll` | `kp=70, kd=0.8` | 脚完全着地 | 两次结果均值约 `actual_step ≈ 0.0070`，`tracking_ratio ≈ 0.467`，离散存在但整体优于 `80/0.8` | 仍偏软 |
 | `right roll` | `kp=60, kd=0.8` | 脚完全着地 | `actual_step ≈ 0.010256`，`tracking_ratio ≈ 0.684`，`peak_time_sec ≈ 0.040694`，无超调、无过零、无振荡 | 在已测触地样本中数值略高，但与 `35/0.5` 一样仍明显欠跟踪，需悬空复核 |
 
+## `right_ankle_roll_joint` 悬空工况补测
+
+| 参数 | 工况 | 结果 | 当前判断 |
+|---|---|---|---|
+| `kp=35, kd=0.5` | 悬空 | `tracking_ratio(window_mean) ≈ 1.106`，`peak_tracking_ratio ≈ 1.184`，`tail_tracking_ratio ≈ 1.146`，`final_tracking_ratio ≈ 0`，`response_class = sustained_oscillation` | 不是欠跟踪，而是明显欠阻尼；active 内冲过头，post 又回到基线附近 |
+| `kp=35, kd=0.8` | 悬空 | `tracking_ratio(window_mean) ≈ 1.191`，`peak_tracking_ratio ≈ 1.251`，`tail_tracking_ratio ≈ 1.239`，`final_tracking_ratio ≈ 0.010`，`response_class = single_overshoot` | 相比 `0.5` 振荡更少、更干净，但仍是明显过冲后回落，不是稳态跟踪 |
+| `kp=35, kd=1.0` | 悬空 | `tracking_ratio(window_mean) ≈ 1.190`，`peak_tracking_ratio ≈ 1.255`，`tail_tracking_ratio ≈ 1.236`，`final_tracking_ratio ≈ 0.012`，`response_class = single_overshoot` | 与 `0.8` 基本同类，没有继续改善，不优于 `0.8` |
+
+### `right roll` 悬空工况阶段结论
+
+- `kp=35` 这条支路在悬空下已经说明问题：
+  - `kd=0.5` 时是持续振荡
+  - `kd=0.8` 和 `kd=1.0` 时振荡被压到单次过冲
+  - 但两者都仍然是“过冲后回落”，不是稳定跟踪到目标
+- 因此当前不能再把 `right roll` 简单理解为“kp 太小”。
+- 悬空和触地下表现分裂明显：
+  - 触地下 `35/0.5` 是明显欠跟踪
+  - 悬空下 `35/0.5` 却是明显欠阻尼
+- 这说明 `right_ankle_roll_joint` 对接触条件高度敏感，当前问题不是单参数单调优化，而是接触耦合和等效动力学差异。
+
 ## 当前结论
 
 - 当前不能给四个自由度下“综合最优”定论。
@@ -78,11 +98,15 @@
   - 是否需要调 `kd`，必须等悬空工况补齐后再判
   - 对 `right roll` 来说，`kp=20/35/50, kd=0.5` 都稳定但欠跟踪，其中 `35/0.5` 是当前触地工况下较合理的对照点
   - 但 `35/0.5` 的 `tracking_ratio` 也只有约 `0.67`，因此不能作为最终收敛值
+  - `right roll` 悬空工况下，`kp=35` 配合 `kd=0.5/0.8/1.0` 都不是收口点：
+    - `0.5` 是持续振荡
+    - `0.8/1.0` 虽更干净，但仍属于明显过冲后回落
+  - 因此 `right roll` 的当前主线不应再理解为“继续微调 `kp=35` 附近的 `kd` 就能收敛”，而应转向接触耦合与悬空/触地差异分析
 
 ## 后续动作
 
 - 先补四个自由度的悬空工况阶跃测试，沿用相同 `step_amplitude_rad = 0.015`。
-- `right_ankle_roll_joint` 下一步优先测试悬空工况，建议先用 `kp=35, kd=0.5` 作为对照参数。
+- `right_ankle_pitch_joint` 下一步优先测试悬空工况，建议先用 `kp=100, kd=0.8` 作为对照参数。
 - 对触地工况按新判据复排：
   - 先看 `tracking_ratio`
   - 再看是否振荡、是否过零、是否耦合放大
