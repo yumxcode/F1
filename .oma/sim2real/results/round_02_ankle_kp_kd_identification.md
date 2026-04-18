@@ -59,9 +59,12 @@
 | `left roll` | `kp=100, kd=0.8` | 脚完全着地 | 两次结果分别 `actual_step ≈ 0.004599` 与 `0.003863` | 明显偏软，排除 |
 | `right pitch` | `kp=100, kd=0.8` | 脚完全着地 | `actual_step ≈ 0.011267`，`tracking_ratio ≈ 0.751`，`steady_error ≈ 0.000114`，无超调、无过零、无振荡 | 触地首轮中相对更接近可用，但仍未达到理想跟踪 |
 | `right pitch` | `kp=105, kd=0.8` | 脚完全着地 | `actual_step ≈ 0.009831`，`tracking_ratio ≈ 0.655`，耦合略小但主轴跟踪下降 | 不优于 `100/0.8` |
+| `right roll` | `kp=20, kd=0.5` | 脚完全着地 | `actual_step ≈ 0.009360`，`tracking_ratio ≈ 0.624`，`peak_time_sec ≈ 0.047694`，无超调、无过零、无振荡 | 稳定但明显欠跟踪，不优于 `35/0.5` |
+| `right roll` | `kp=35, kd=0.5` | 脚完全着地 | `actual_step ≈ 0.010059`，`tracking_ratio ≈ 0.671`，`peak_time_sec ≈ 0.049345`，无超调、无过零、无振荡 | 当前触地工况下的相对最好对照点，但仍明显欠跟踪，不能收口 |
+| `right roll` | `kp=50, kd=0.5` | 脚完全着地 | `actual_step ≈ 0.009380`，`tracking_ratio ≈ 0.625`，`peak_time_sec ≈ 0.046359`，无超调、无过零、无振荡 | 不优于 `35/0.5`，说明该方向非单调改善 |
 | `right roll` | `kp=80, kd=0.8` | 脚完全着地 | `actual_step ≈ 0.006009`，`tracking_ratio ≈ 0.401`，`steady_error ≈ 0.000918`，无超调、无过零、无振荡 | 明显偏软 |
 | `right roll` | `kp=70, kd=0.8` | 脚完全着地 | 两次结果均值约 `actual_step ≈ 0.0070`，`tracking_ratio ≈ 0.467`，离散存在但整体优于 `80/0.8` | 仍偏软 |
-| `right roll` | `kp=60, kd=0.8` | 脚完全着地 | `actual_step ≈ 0.010256`，`tracking_ratio ≈ 0.684`，`peak_time_sec ≈ 0.040694`，无超调、无过零、无振荡 | 触地首轮里相对最好，但仍需悬空复核 |
+| `right roll` | `kp=60, kd=0.8` | 脚完全着地 | `actual_step ≈ 0.010256`，`tracking_ratio ≈ 0.684`，`peak_time_sec ≈ 0.040694`，无超调、无过零、无振荡 | 在已测触地样本中数值略高，但与 `35/0.5` 一样仍明显欠跟踪，需悬空复核 |
 
 ## 当前结论
 
@@ -73,10 +76,13 @@
   - `right pitch kp=100, kd=0.8` 与 `right roll kp=60, kd=0.8` 在触地首轮中相对更接近可用
   - `left pitch` 与 `left roll` 触地下仍偏软，需继续扫 `kp` 或复核测试一致性
   - 是否需要调 `kd`，必须等悬空工况补齐后再判
+  - 对 `right roll` 来说，`kp=20/35/50, kd=0.5` 都稳定但欠跟踪，其中 `35/0.5` 是当前触地工况下较合理的对照点
+  - 但 `35/0.5` 的 `tracking_ratio` 也只有约 `0.67`，因此不能作为最终收敛值
 
 ## 后续动作
 
 - 先补四个自由度的悬空工况阶跃测试，沿用相同 `step_amplitude_rad = 0.015`。
+- `right_ankle_roll_joint` 下一步优先测试悬空工况，建议先用 `kp=35, kd=0.5` 作为对照参数。
 - 对触地工况按新判据复排：
   - 先看 `tracking_ratio`
   - 再看是否振荡、是否过零、是否耦合放大

@@ -261,6 +261,7 @@ def summarize_step(rows, timing_context):
     peak_idx = normalized_response.index(peak_normalized) if normalized_response else 0
     peak_overshoot = max(0.0, peak_normalized - step_size)
     overshoot_ratio = peak_overshoot / step_size if step_size > 1e-9 else None
+    peak_tracking_ratio = peak_normalized / step_size if step_size > 1e-9 else None
     peak_time_sec = active_times[peak_idx] if active_times else None
     rise_time_10 = first_crossing_time(active_times, normalized_response, 0.1 * step_size)
     rise_time_90 = first_crossing_time(active_times, normalized_response, 0.9 * step_size)
@@ -272,6 +273,18 @@ def summarize_step(rows, timing_context):
     first_target_cross_time = first_crossing_time(active_times, normalized_response, step_size)
     settling_band = max(0.02 * step_size, 1e-6)
     settling_time_sec = settling_time(active_times, active_positions, active_target, settling_band)
+
+    tail_duration_sec = min(0.1, active_sec_)
+    tail_rows = []
+    if active_rows:
+        tail_start_time = active_rows[-1]["time_sec"] - tail_duration_sec
+        tail_rows = [row for row in active_rows if row["time_sec"] >= tail_start_time]
+    tail_actual = mean([r["actual_primary"] for r in tail_rows]) if tail_rows else None
+    tail_actual_step = (tail_actual - pre_actual) if tail_actual is not None else None
+    tail_tracking_ratio = tail_actual_step / command_step if tail_actual_step is not None and abs(command_step) > 1e-9 else None
+
+    post_actual_step = post_actual - pre_actual
+    final_tracking_ratio = post_actual_step / command_step if abs(command_step) > 1e-9 else None
 
     error_values = [direction * (pos - active_target) for pos in active_positions]
     crossings = zero_crossings(active_times, error_values)
@@ -307,6 +320,11 @@ def summarize_step(rows, timing_context):
         "command_step": command_step,
         "actual_step": actual_step,
         "tracking_ratio": tracking_ratio,
+        "peak_tracking_ratio": peak_tracking_ratio,
+        "tail_actual_step": tail_actual_step,
+        "tail_tracking_ratio": tail_tracking_ratio,
+        "post_actual_step": post_actual_step,
+        "final_tracking_ratio": final_tracking_ratio,
         "coupled_motion": coupled_motion,
         "peak_overshoot": peak_overshoot,
         "overshoot_ratio": overshoot_ratio,
@@ -411,7 +429,17 @@ def print_step_summary(summary):
     print(f"  command_step: {summary['command_step']:.6f}")
     print(f"  actual_step: {summary['actual_step']:.6f}")
     if summary["tracking_ratio"] is not None:
-        print(f"  tracking_ratio: {summary['tracking_ratio']:.6f}")
+        print(f"  tracking_ratio(window_mean): {summary['tracking_ratio']:.6f}")
+    if summary["peak_tracking_ratio"] is not None:
+        print(f"  peak_tracking_ratio: {summary['peak_tracking_ratio']:.6f}")
+    if summary["tail_actual_step"] is not None:
+        print(f"  tail_actual_step: {summary['tail_actual_step']:.6f}")
+    if summary["tail_tracking_ratio"] is not None:
+        print(f"  tail_tracking_ratio: {summary['tail_tracking_ratio']:.6f}")
+    if summary["post_actual_step"] is not None:
+        print(f"  post_actual_step: {summary['post_actual_step']:.6f}")
+    if summary["final_tracking_ratio"] is not None:
+        print(f"  final_tracking_ratio: {summary['final_tracking_ratio']:.6f}")
     print(f"  coupled_motion: {summary['coupled_motion']:.6f}")
     print(f"  peak_overshoot: {summary['peak_overshoot']:.6f}")
     if summary["overshoot_ratio"] is not None:
@@ -491,6 +519,11 @@ def main():
             "command_step",
             "actual_step",
             "tracking_ratio",
+            "peak_tracking_ratio",
+            "tail_actual_step",
+            "tail_tracking_ratio",
+            "post_actual_step",
+            "final_tracking_ratio",
             "coupled_motion",
             "peak_overshoot",
             "overshoot_ratio",
