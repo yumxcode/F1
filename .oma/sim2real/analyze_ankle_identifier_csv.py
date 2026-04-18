@@ -2,6 +2,7 @@
 
 import argparse
 import csv
+import json
 import math
 import statistics
 from pathlib import Path
@@ -177,6 +178,43 @@ def summarize_numeric_dicts(items, fields):
     return summary
 
 
+def load_timing_context(deploy_info_path):
+    with open(deploy_info_path, "r", encoding="utf-8") as f:
+        deploy_info = json.load(f)
+
+    control_hz = deploy_info["deployment_target"]["control_frequency_hz"]
+    cycle_time_sec = deploy_info["rl_walk_leg_params"]["walk_step_conf"]["cycle_time"]
+    stance_ratio = 0.6
+    rise_budget_ratio = 0.2
+    peak_budget_ratio = 0.35
+
+    stance_time_sec = cycle_time_sec * stance_ratio
+    return {
+        "deploy_info_path": str(deploy_info_path),
+        "control_hz": control_hz,
+        "control_period_sec": 1.0 / control_hz if control_hz > 0 else None,
+        "cycle_time_sec": cycle_time_sec,
+        "stance_ratio": stance_ratio,
+        "stance_time_sec": stance_time_sec,
+        "rise_budget_ratio": rise_budget_ratio,
+        "peak_budget_ratio": peak_budget_ratio,
+        "rise_time_upper_sec": stance_time_sec * rise_budget_ratio,
+        "peak_time_upper_sec": stance_time_sec * peak_budget_ratio,
+        "rise_time_lower_sec": (1.0 / control_hz) * 5.0 if control_hz > 0 else None,
+        "peak_time_lower_sec": 0.015,
+    }
+
+
+def classify_time_status(value_sec, lower_sec, upper_sec, too_slow_label):
+    if value_sec is None:
+        return "not_available"
+    if lower_sec is not None and value_sec < lower_sec:
+        return "too_fast"
+    if upper_sec is not None and value_sec > upper_sec:
+        return too_slow_label
+    return "good"
+
+
 def detect_signal_path(rows):
     target_values = [r["target_primary"] for r in rows]
     actual_values = [r["actual_primary"] for r in rows]
@@ -190,7 +228,7 @@ def detect_signal_path(rows):
     return "ok", target_span, actual_span
 
 
-def summarize_step(rows):
+def summarize_step(rows, timing_context):
     phases = split_by_phase(rows)
     pre_rows = phases.get("pre_hold", [])
     active_rows = phases.get("active", [])
@@ -246,6 +284,18 @@ def summarize_step(rows):
     decay_ratio, estimated_damping_ratio = estimate_decay_metrics(
         active_times, error_values, first_target_cross_time
     )
+    rise_time_status = classify_time_status(
+        rise_time_sec,
+        timing_context["rise_time_lower_sec"],
+        timing_context["rise_time_upper_sec"],
+        "too_slow_for_walking",
+    )
+    peak_time_status = classify_time_status(
+        peak_time_sec,
+        timing_context["peak_time_lower_sec"],
+        timing_context["peak_time_upper_sec"],
+        "unusable_for_walking",
+    )
 
     return {
         "pre_target": pre_target,
@@ -262,7 +312,9 @@ def summarize_step(rows):
         "overshoot_ratio": overshoot_ratio,
         "steady_error": steady_error,
         "rise_time_sec": rise_time_sec,
+        "rise_time_status": rise_time_status,
         "peak_time_sec": peak_time_sec,
+        "peak_time_status": peak_time_status,
         "first_target_cross_time_sec": first_target_cross_time,
         "settling_time_sec": settling_time_sec,
         "zero_crossing_count": len(crossings),
@@ -342,6 +394,18 @@ def print_signal_path_result(status, target_span, actual_span):
         print("  result: target changed but actual stayed nearly static. Check /joint_cmd delivery and driver side reception.")
 
 
+def print_timing_context(timing_context):
+    print("Timing context:")
+    print(f"  deploy_info_path: {timing_context['deploy_info_path']}")
+    print(f"  control_hz: {timing_context['control_hz']}")
+    print(f"  cycle_time_sec: {timing_context['cycle_time_sec']:.6f}")
+    print(f"  stance_time_sec: {timing_context['stance_time_sec']:.6f}")
+    print(f"  rise_time_lower_sec: {timing_context['rise_time_lower_sec']:.6f}")
+    print(f"  rise_time_upper_sec: {timing_context['rise_time_upper_sec']:.6f}")
+    print(f"  peak_time_lower_sec: {timing_context['peak_time_lower_sec']:.6f}")
+    print(f"  peak_time_upper_sec: {timing_context['peak_time_upper_sec']:.6f}")
+
+
 def print_step_summary(summary):
     print("Mode: step")
     print(f"  command_step: {summary['command_step']:.6f}")
@@ -355,8 +419,10 @@ def print_step_summary(summary):
     print(f"  steady_error: {summary['steady_error']:.6f}")
     if summary["rise_time_sec"] is not None:
         print(f"  rise_time_sec: {summary['rise_time_sec']:.6f}")
+        print(f"  rise_time_status: {summary['rise_time_status']}")
     if summary["peak_time_sec"] is not None:
         print(f"  peak_time_sec: {summary['peak_time_sec']:.6f}")
+        print(f"  peak_time_status: {summary['peak_time_status']}")
     if summary["first_target_cross_time_sec"] is not None:
         print(f"  first_target_cross_time_sec: {summary['first_target_cross_time_sec']:.6f}")
     if summary["settling_time_sec"] is not None:
@@ -393,22 +459,30 @@ def print_sine_summary(summary):
 def main():
     parser = argparse.ArgumentParser(description="Analyze native_ros2_ankle_identifier CSV output.")
     parser.add_argument("csv_path", type=Path, help="Path to CSV file generated by native_ros2_ankle_identifier")
+    parser.add_argument(
+        "--deploy-info",
+        type=Path,
+        default=Path(".oma/deploy_info.json"),
+        help="Path to deploy_info.json used to derive control_hz and cycle_time",
+    )
     args = parser.parse_args()
 
     rows = load_rows(args.csv_path)
     if not rows:
         raise SystemExit("CSV has no data rows.")
+    timing_context = load_timing_context(args.deploy_info)
 
     print_basic(rows)
     status, target_span, actual_span = detect_signal_path(rows)
     print_signal_path_result(status, target_span, actual_span)
+    print_timing_context(timing_context)
 
     mode = infer_mode(rows)
     if mode == "step":
         iteration_groups = group_by_iteration(rows)
         iteration_summaries = []
         for iteration in sorted(iteration_groups):
-            summary = summarize_step(iteration_groups[iteration])
+            summary = summarize_step(iteration_groups[iteration], timing_context)
             iteration_summaries.append(summary)
             print(f"Iteration {iteration}:")
             print_step_summary(summary)
@@ -436,6 +510,8 @@ def main():
         ]
         aggregate = summarize_numeric_dicts(iteration_summaries, aggregate_fields)
         response_classes = [summary["response_class"] for summary in iteration_summaries]
+        rise_statuses = [summary["rise_time_status"] for summary in iteration_summaries]
+        peak_statuses = [summary["peak_time_status"] for summary in iteration_summaries]
 
         print("Aggregate across iterations:")
         for field in aggregate_fields:
@@ -444,6 +520,8 @@ def main():
                 continue
             print(f"  {field}: {stats['mean']:.6f} ± {stats['std']:.6f}")
         print(f"  response_classes: {response_classes}")
+        print(f"  rise_time_statuses: {rise_statuses}")
+        print(f"  peak_time_statuses: {peak_statuses}")
     elif mode == "sine":
         print_sine_summary(summarize_sine(rows))
     else:
