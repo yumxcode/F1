@@ -274,7 +274,8 @@ def summarize_step(rows, timing_context):
     settling_band = max(0.02 * step_size, 1e-6)
     settling_time_sec = settling_time(active_times, active_positions, active_target, settling_band)
 
-    tail_duration_sec = min(0.1, active_sec_)
+    active_duration_sec = active_times[-1] if active_times else 0.0
+    tail_duration_sec = min(0.1, active_duration_sec)
     tail_rows = []
     if active_rows:
         tail_start_time = active_rows[-1]["time_sec"] - tail_duration_sec
