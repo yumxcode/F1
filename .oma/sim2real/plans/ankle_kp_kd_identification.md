@@ -1,6 +1,6 @@
 # 并联踝关节 Kp/Kd 辨识方案
 
-目标：在正式修改 `rl_walk_leg` 的踝关节 `stiffness/damping` 前，先得到并联踝关节末端自由度在空载和轻接触下的等效闭环响应特性，判断应优先调 `kp`、`kd` 还是 `lpf_conf.wc`。
+目标：在正式修改 `rl_walk_leg` 的踝关节 `stiffness/damping` 前，得到并联踝关节末端自由度在悬空和触地两类工况下的等效闭环响应特性，并用“跟踪能力 + 阻尼质量”联合判据收敛 `kp/kd`，避免把低跟踪率误判成“无超调最优”。
 
 适用关节：
 - `left_ankle_pitch_joint`
@@ -10,10 +10,10 @@
 
 说明：
 - 真机踝关节为并联结构，不按“单电机单关节”思路做辨识。
-- 本方案辨识对象改为踝关节末端等效自由度响应：
-  - `ankle_pitch` 末端等效响应
-  - `ankle_roll` 末端等效响应
-- 重点观察主方向响应、交叉耦合响应、接触条件下的振动放大，而不是内部单执行器本体响应。
+- 本方案辨识对象是踝关节末端等效自由度响应：
+  - `ankle_pitch`
+  - `ankle_roll`
+- 重点观察主方向跟踪、交叉耦合、接触条件下的振动放大，而不是内部单执行器本体响应。
 
 相关文件：
 - 驱动-only 配置：[x1_cfg_identifier.yaml](/Users/yumx/code/X1/agibot_x1_infer/src/install/linux/bin/cfg/x1_cfg_identifier.yaml:1)
@@ -21,13 +21,49 @@
 - 辨识节点：[native_ros2_ankle_identifier](/Users/yumx/code/X1/agibot_x1_infer/src/assistant/native_ros2_ankle_identifier/main.cc:1)
 - CSV 分析脚本：[analyze_ankle_identifier_csv.py](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/analyze_ankle_identifier_csv.py:1)
 
+## Round 2 当前约束
+
+- `Round 2` 还未完成。
+- 当前只完成了触地工况首轮阶跃扫描。
+- 悬空工况未补齐前，任何自由度都不能标记为“已收敛”。
+- 后续所有排序都必须使用同一判据：
+  - `tracking_ratio = actual_step / command_step`
+  - 是否过零
+  - 是否振荡
+  - `peak_time_sec`
+  - `settling_time_sec`
+  - `coupled_motion`
+
 ## 辨识原则
 
 - 一次只测一个末端自由度，其余姿态尽量锁定在稳定站姿。
-- 先空载，再轻接地；先更小幅阶跃，再更小幅扫频。
-- 先保持 `kp` 不变，用末端响应形态判断是否需要优先增加 `kd`。
+- 悬空和触地都要测，缺一不可。
+- 先小阶跃，再低频扫频。
+- `no_overshoot + no_zero_crossing` 不是充分条件，必须同时看 `tracking_ratio`。
 - 如果空载不抖、接地抖，优先怀疑并联耦合、接触耦合和滤波相位滞后，不要直接大幅加 `kp`。
 - 任何测试都先从最小激励开始，不直接使用大幅位置阶跃。
+
+## 优选判据
+
+真正好的“无超调”应同时满足：
+
+- `tracking_ratio` 接近 `1.0`
+- 无持续振荡
+- 无明显过零
+- `peak_time_sec` 和 `settling_time_sec` 不异常变长
+- `coupled_motion` 不明显放大
+
+需要明确排除的情形：
+
+- `actual_step ≈ 0.6 x command_step`
+- 主轴没有冲到目标，只是因为系统太软所以看起来“不超调”
+- 末段平滑，但跟踪严重不足
+
+推荐排序顺序：
+
+1. 先剔除有明显振荡、过零或耦合放大的配置
+2. 在剩余配置中优先保留 `tracking_ratio` 更接近 `1.0` 的配置
+3. 再比较 `peak_time_sec`、`settling_time_sec` 和 effort 代价
 
 ## 测试前固定项
 
@@ -36,9 +72,9 @@
 | 机器人状态 | 吊保护或可靠支撑 | 避免跌倒 |
 | 其他关节 | 锁定在稳定站姿 | 减少耦合 |
 | 被测自由度模式 | 单自由度末端小扰动 | 不做大幅动作 |
-| 初始 `kp/kd` | 当前部署值 | 先不改 |
 | 记录频率 | `>= 500 Hz`，建议 `1000 Hz` | 尽量与控制频率一致 |
 | 每次改动 | 只改一个变量 | 便于归因 |
+| 阶跃基线 | `step_amplitude_rad = 0.015` | 悬空和触地保持同口径 |
 
 ## 启动流程
 
@@ -70,7 +106,7 @@ ros2 topic info /joint_cmd
 
 4. 启动辨识节点
 
-左脚 `pitch` 小阶跃：
+示例：
 
 ```bash
 cd build
@@ -80,55 +116,14 @@ cd build
   -p test_side:=left \
   -p test_axis:=pitch \
   -p publish_rate_hz:=1000.0 \
-  -p step_amplitude_rad:=0.005 \
+  -p step_amplitude_rad:=0.015 \
   -p pre_hold_sec:=2.0 \
   -p active_sec:=1.0 \
   -p post_hold_sec:=2.0 \
   -p repeat_count:=3 \
-  -p test_kp:=35.0 \
+  -p test_kp:=100.0 \
   -p test_kd:=0.8 \
   -p csv_path:=/tmp/left_pitch_step.csv
-```
-
-左脚 `roll` 小阶跃：
-
-```bash
-cd build
-./native_ros2_ankle_identifier \
-  --ros-args \
-  -p mode:=step \
-  -p test_side:=left \
-  -p test_axis:=roll \
-  -p publish_rate_hz:=1000.0 \
-  -p step_amplitude_rad:=0.005 \
-  -p pre_hold_sec:=2.0 \
-  -p active_sec:=1.0 \
-  -p post_hold_sec:=2.0 \
-  -p repeat_count:=3 \
-  -p test_kp:=35.0 \
-  -p test_kd:=0.8 \
-  -p csv_path:=/tmp/left_roll_step.csv
-```
-
-左脚 `pitch` 正弦辨识：
-
-```bash
-cd build
-./native_ros2_ankle_identifier \
-  --ros-args \
-  -p mode:=sine \
-  -p test_side:=left \
-  -p test_axis:=pitch \
-  -p publish_rate_hz:=1000.0 \
-  -p sine_amplitude_rad:=0.004 \
-  -p sine_frequency_hz:=1.0 \
-  -p pre_hold_sec:=2.0 \
-  -p active_sec:=8.0 \
-  -p post_hold_sec:=2.0 \
-  -p repeat_count:=1 \
-  -p test_kp:=35.0 \
-  -p test_kd:=0.8 \
-  -p csv_path:=/tmp/left_pitch_sine_1hz.csv
 ```
 
 5. 结束条件
@@ -143,16 +138,15 @@ cd build
 python3 .oma/sim2real/analyze_ankle_identifier_csv.py /tmp/left_pitch_step.csv
 ```
 
-脚本会输出：
-- 样本数和阶段分布
-- 主测试关节和耦合关节名称
-- 链路是否真正打通
-- `step` 模式下的主方向响应、耦合响应、稳态误差、峰值 effort
-- `sine` 模式下的主方向幅值、耦合幅值、增益、耦合比
-
-注意：
-- 示例命令统一显式传入 `-p publish_rate_hz:=1000.0`，与当前部署控制频率对齐。
-- 如果现场临时降到更低频率做安全验证，结果文件里必须明确记录该频率，避免和正式辨识数据混用。
+脚本重点输出：
+- `command_step`
+- `actual_step`
+- `tracking_ratio`
+- `peak_overshoot`
+- `zero_crossing_count`
+- `peak_time_sec`
+- `settling_time_sec`
+- `response_class`
 
 ## 需要记录的数据
 
@@ -168,35 +162,33 @@ python3 .oma/sim2real/analyze_ankle_identifier_csv.py /tmp/left_pitch_step.csv
 | 输出 effort / torque command | 是 | 判断是否饱和 |
 | 当前 `kp` | 是 | 记录配置 |
 | 当前 `kd` | 是 | 记录配置 |
-| IMU 局部角速度 | 否，但推荐 | 看接触振动传播 |
-| 接触状态 | 否，但推荐 | 区分空载/接地 |
+| 接触状态 | 是 | 必须明确写明悬空或触地 |
 
-## 实验 1：空载小阶跃
+## 实验 1：悬空小阶跃
 
-目的：快速看末端主方向超调、振荡、稳定时间、左右一致性和 pitch-roll 交叉耦合。
+目的：先在较少接触耦合的条件下看主方向跟踪率、超调、振荡和左右一致性。
 
 | 项目 | 建议值 |
 |---|---|
 | 输入类型 | 末端自由度位置阶跃 |
-| 幅值 | `0.005 rad` 起，最多先到 `0.02 rad` |
+| 幅值 | `0.015 rad` |
 | 保持时间 | `1 s` |
 | 重复次数 | 正向 3 次，反向 3 次 |
 | 被测对象 | 左右踝 `pitch` 与 `roll` 逐个测试 |
-| 中止条件 | 明显异响、持续振荡、输出异常增大、明显耦合摆动 |
 
 记录指标：
 
 | 指标 | 记录内容 |
 |---|---|
+| 跟踪率 | `tracking_ratio = actual_step / command_step` |
 | 上升时间 | `10% -> 90%` |
 | 超调量 | 峰值偏离目标百分比 |
 | 稳定时间 | 进入并保持在误差带内的时间 |
 | 稳态误差 | 最终误差 |
 | 主方向是否振荡 | 无 / 轻微 / 明显 |
 | 交叉方向响应 | 无 / 轻微 / 明显 |
-| 左右一致性 | 左右差异是否明显 |
 
-## 实验 2：空载正弦扫频
+## 实验 2：悬空正弦扫频
 
 目的：识别容易激发并联踝抖动的频段，判断末端闭环带宽、耦合和相位滞后趋势。
 
@@ -208,25 +200,15 @@ python3 .oma/sim2real/analyze_ankle_identifier_csv.py /tmp/left_pitch_step.csv
 | 每个频点时长 | `8 ~ 10 s` |
 | 被测对象 | 左右踝 `pitch` 与 `roll` 逐个测试 |
 
-记录指标：
+## 实验 3：触地小阶跃
 
-| 指标 | 记录内容 |
-|---|---|
-| 主方向幅值比 | `q / q_des` |
-| 主方向相位滞后 | `q` 相对 `q_des` 的延迟趋势 |
-| 交叉方向幅值 | 耦合响应是否被激发 |
-| 是否出现共振 | 某频段响应放大 |
-| effort 波动 | 是否随频率明显放大 |
-
-## 实验 3：轻接地小阶跃
-
-目的：验证接触条件下并联踝末端是否比空载更容易抖，以及耦合是否放大。
+目的：验证接触条件下并联踝末端是否比悬空更容易抖，以及是否出现“无超调但欠跟踪”的软响应。
 
 | 项目 | 建议值 |
 |---|---|
 | 输入类型 | 末端自由度位置阶跃 |
-| 幅值 | `0.005 ~ 0.015 rad` |
-| 工况 | 吊保护，脚掌轻触地面 |
+| 幅值 | `0.015 rad` |
+| 工况 | 吊保护，脚掌稳定触地 |
 | 保持时间 | `1 s` |
 | 重复次数 | 正反各 3 次 |
 
@@ -234,12 +216,12 @@ python3 .oma/sim2real/analyze_ankle_identifier_csv.py /tmp/left_pitch_step.csv
 
 | 现象 | 含义 |
 |---|---|
-| 空载稳定、接地抖 | 接触耦合问题明显，优先看 `kd` 和 `lpf_conf.wc` |
+| 悬空跟踪正常，触地下 `tracking_ratio` 明显掉到 `< 0.8` | 接触下等效刚度不足，不能因无超调而判优 |
+| 悬空稳定、接地抖 | 接触耦合问题明显，优先看 `kd` 和 `lpf_conf.wc` |
 | 接地后交叉方向响应明显增大 | 并联耦合在接触状态下被放大 |
 | 接地后 effort 明显放大 | 接触刚度放大了控制环响应 |
-| 接地后左右差异扩大 | 地面接触或机械一致性存在问题 |
 
-## 实验 4：轻接地低频扫频
+## 实验 4：触地低频扫频
 
 目的：验证实际接触工况下容易触发并联踝抖动和耦合的频段。
 
@@ -249,37 +231,13 @@ python3 .oma/sim2real/analyze_ankle_identifier_csv.py /tmp/left_pitch_step.csv
 | 幅值 | `0.003 ~ 0.006 rad` |
 | 频率点 | `0.5, 1, 2, 3 Hz` |
 | 每个频点时长 | `8 s` |
-| 工况 | 脚掌轻接地 |
+| 工况 | 脚掌稳定触地 |
 
 ## 调参决策表
 
 | 辨识结果 | 优先动作 |
 |---|---|
 | 阶跃超调大，存在衰减振荡 | 先增加 `kd` |
-| 响应偏软、跟踪慢、无明显抖动 | 先增加 `kp` |
-| 空载正常，接地才抖 | 先小幅增加 `kd`，再看是否降低 `lpf_conf.wc` |
-| 高频小抖明显，扫频中高频段放大 | 先增加 `kd`，必要时降低 `lpf_conf.wc` |
-| 主方向激励带出明显交叉方向响应 | 优先评估并联耦合，不直接大幅加 `kp` |
-| 左右脚响应差异明显 | 先排查装配、摩擦、零位，不先改统一参数 |
-| effort 经常接近饱和 | 不先加 `kp`，先看命令幅值和接触工况 |
-
-## 建议起步执行顺序
-
-1. 左右踝 `pitch` 与 `roll` 空载小阶跃
-2. 左右踝 `pitch` 与 `roll` 空载低频扫频
-3. 轻接地小阶跃
-4. 轻接地低频扫频
-5. 汇总左右对比结论
-6. 汇总主方向与交叉耦合结论
-7. 再决定优先改 `kp`、`kd` 或 `lpf_conf.wc`
-
-## 辨识记录表
-
-| 轮次 | 自由度 | 工况 | 输入类型 | 幅值 | 频率/保持时间 | 当前 `kp` | 当前 `kd` | 超调 | 稳定时间 | 主方向是否抖动 | 交叉耦合是否明显 | effort 是否异常 | 结论 | 下一步 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| 2 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| 3 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| 4 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| 5 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| 6 |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| `tracking_ratio < 0.8`，响应偏软、跟踪不足、无明显抖动 | 先增加 `kp`，不要把它记成“好阻尼” |
+| 悬空正常，接地才抖 | 先小幅增加 `kd`，再看是否降低 `lpf_conf.wc` |
+| 悬空和触地都持续欠跟踪 | 继续向上扫描 `kp`，并检查阶跃幅值与接触一致性 |

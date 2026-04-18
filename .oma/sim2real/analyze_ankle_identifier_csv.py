@@ -150,7 +150,13 @@ def estimate_decay_metrics(times, error_values, first_cross_time):
     return decay_ratio, damping_ratio
 
 
-def classify_response(overshoot, zero_crossing_count, settling_time_sec):
+def classify_response(overshoot, zero_crossing_count, settling_time_sec, tracking_ratio):
+    if tracking_ratio is None:
+        return "unknown"
+    if tracking_ratio < 0.8:
+        return "undershoot_soft"
+    if overshoot <= 1e-6 and zero_crossing_count == 0 and tracking_ratio <= 1.05:
+        return "well_damped_tracking"
     if overshoot <= 1e-6:
         return "no_overshoot"
     if zero_crossing_count <= 1:
@@ -200,6 +206,7 @@ def summarize_step(rows):
 
     command_step = active_target - pre_target
     actual_step = active_actual - pre_actual
+    tracking_ratio = actual_step / command_step if abs(command_step) > 1e-9 else None
     coupled_motion = mean([r["actual_coupled"] for r in active_rows]) - mean(
         [r["actual_coupled"] for r in pre_rows]
     )
@@ -249,6 +256,7 @@ def summarize_step(rows):
         "post_actual": post_actual,
         "command_step": command_step,
         "actual_step": actual_step,
+        "tracking_ratio": tracking_ratio,
         "coupled_motion": coupled_motion,
         "peak_overshoot": peak_overshoot,
         "overshoot_ratio": overshoot_ratio,
@@ -261,7 +269,9 @@ def summarize_step(rows):
         "oscillation_frequency_hz": oscillation_frequency_hz,
         "decay_ratio": decay_ratio,
         "estimated_damping_ratio": estimated_damping_ratio,
-        "response_class": classify_response(peak_overshoot, len(crossings), settling_time_sec),
+        "response_class": classify_response(
+            peak_overshoot, len(crossings), settling_time_sec, tracking_ratio
+        ),
         "primary_peak_velocity": max_abs([r["actual_primary_vel"] for r in active_rows]),
         "coupled_peak_velocity": max_abs([r["actual_coupled_vel"] for r in active_rows]),
         "primary_peak_effort": max_abs([r["actual_primary_effort"] for r in active_rows]),
@@ -336,6 +346,8 @@ def print_step_summary(summary):
     print("Mode: step")
     print(f"  command_step: {summary['command_step']:.6f}")
     print(f"  actual_step: {summary['actual_step']:.6f}")
+    if summary["tracking_ratio"] is not None:
+        print(f"  tracking_ratio: {summary['tracking_ratio']:.6f}")
     print(f"  coupled_motion: {summary['coupled_motion']:.6f}")
     print(f"  peak_overshoot: {summary['peak_overshoot']:.6f}")
     if summary["overshoot_ratio"] is not None:
@@ -404,6 +416,7 @@ def main():
         aggregate_fields = [
             "command_step",
             "actual_step",
+            "tracking_ratio",
             "coupled_motion",
             "peak_overshoot",
             "overshoot_ratio",
