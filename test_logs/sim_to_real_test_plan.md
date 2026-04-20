@@ -454,7 +454,7 @@ print(f"超过 1.5ms 的帧数: {(dt_us > 1500).sum()} / {len(dt_us)}")
 
 ### 6.4 总体测试结论
 
-| 测试步骤 | 脚本 | 判定 | 结论 |
+| 测试步骤 | 脚本 | 判定 | 结论 | 
 |---|---|:---:|---|
 | Step 2 Inference Gap | `inference_gap_check.py` | ✅ **PASS** | 推理引擎层无 Gap（max L2 = 8.1e-6）|
 | Step 3 Phase A 反向解析 | `obs_gap_phase_a.py` | ✅ **无 FAIL** | 各组件逻辑正确，WARN 项根因已定位 |
