@@ -66,6 +66,8 @@ def main() -> int:
     parser.add_argument("--side", choices=["left", "right"], required=True)
     parser.add_argument("--axis", choices=["pitch", "roll"], required=True)
     parser.add_argument("--mode", choices=["step", "sine"], default="step")
+    parser.add_argument("--contact", choices=["air", "ground"], default=None)
+    parser.add_argument("--tag", default=None)
     parser.add_argument("--kp", type=float, required=True)
     parser.add_argument("--kd", type=float, required=True)
     parser.add_argument("--step-amplitude", type=float, default=0.015)
@@ -74,7 +76,14 @@ def main() -> int:
     parser.add_argument("--csv-path", default=None)
     args = parser.parse_args()
 
-    csv_path = args.csv_path or f"./log/{args.side}_{args.axis}_{args.mode}_kp{args.kp:g}_kd{args.kd:g}.csv"
+    auto_name = f"{args.side}_{args.axis}_{args.mode}"
+    if args.contact:
+        auto_name += f"_{args.contact}"
+    auto_name += f"_kp{args.kp:g}_kd{args.kd:g}"
+    if args.tag:
+        auto_name += f"_{args.tag}"
+
+    csv_path = args.csv_path or f"./log/{auto_name}.csv"
     updates = {
         "mode": args.mode,
         "test_side": args.side,
@@ -103,6 +112,8 @@ def main() -> int:
     print(f"  mode={args.mode}")
     print(f"  side={args.side}")
     print(f"  axis={args.axis}")
+    if args.contact:
+        print(f"  contact={args.contact}")
     print(f"  kp={args.kp:g}")
     print(f"  kd={args.kd:g}")
     print(f"  step_amplitude_rad={args.step_amplitude:g}")

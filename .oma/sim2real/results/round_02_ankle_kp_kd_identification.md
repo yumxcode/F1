@@ -7,10 +7,36 @@
 - `Round 2` 仍在进行中，不能视为完成。
 - 已完成内容：
   - 四个自由度的触地工况首轮阶跃扫描
+  - `right_ankle_roll_joint` 的悬空补测：`kp=35`，`kd=0.5/0.8/1.0`
+  - `right_ankle_pitch_joint` 的悬空补测：`kp=35, kd=0.5`
+  - `right_ankle_pitch_joint` 的完全触地补测：`kp=20/35/50/100, kd=0.5`
 - 未完成内容：
-  - 四个自由度的悬空工况补测
-  - 用新判据回看触地数据
-  - 对“无超调但欠跟踪”的配置重新排序
+  - `left_ankle_pitch_joint` 与 `left_ankle_roll_joint` 的悬空工况补测
+  - `right_ankle_pitch_joint` 的悬空对照补测：`kp=100, kd=0.8`
+  - 用统一新判据回看并重排全部触地数据
+  - 对“无超调但欠跟踪”的配置重新排序，形成可执行候选集
+
+## 一页结论
+
+- 这轮最大的纠偏不是找到最终 `kp/kd`，而是纠正了评价准则：
+  - `no_overshoot + no_zero_crossing` 不能直接当作优解
+  - `tracking_ratio` 明显低于 `1.0` 的配置，本质上是偏软欠跟踪
+- 当前最明确的负结论有两条：
+  - `right_ankle_roll_joint` 的 `kp=35` 在悬空下从 `kd=0.5` 到 `1.0` 都不是收口点
+  - `right_ankle_pitch_joint` 的完全触地 `kd=0.5` 支路不是有效收敛方向
+- 当前最需要补齐的不是更多触地点，而是：
+  - 左脚两轴悬空数据
+  - `right_ankle_pitch_joint` 在 `kp=100, kd=0.8` 下的悬空对照
+- 因此 `Round 2` 现在只能写“局部结论已形成”，不能写“参数已收敛”。
+
+## 当前覆盖矩阵
+
+| 自由度 | 触地首轮 | 触地补测 | 悬空补测 | 当前状态 |
+|---|---|---|---|---|
+| `left_ankle_pitch_joint` | 已完成 | 无 | 无 | 证据不足，不能排序收口 |
+| `left_ankle_roll_joint` | 已完成 | 无 | 无 | 证据不足，不能排序收口 |
+| `right_ankle_pitch_joint` | 已完成 | `kd=0.5` 支路已补 | `kp=35, kd=0.5` 已补 | 已形成局部负结论，但还缺 `100/0.8` 悬空对照 |
+| `right_ankle_roll_joint` | 已完成 | 无 | `kp=35, kd=0.5/0.8/1.0` 已补 | 已形成“接触条件强分裂”结论 |
 
 ## 本轮纠偏
 
@@ -35,7 +61,7 @@
   - `right_ankle_pitch_joint`
   - `right_ankle_roll_joint`
 - 接触条件：
-  - 悬空工况：待补
+  - 悬空工况：右脚两轴已部分补测，左脚两轴与 `right pitch 100/0.8` 对照仍待补
   - 脚完全着地工况：已完成首轮扫描
 - 固定条件：
   - `mode = step`
@@ -86,28 +112,72 @@
   - 悬空下 `35/0.5` 却是明显欠阻尼
 - 这说明 `right_ankle_roll_joint` 对接触条件高度敏感，当前问题不是单参数单调优化，而是接触耦合和等效动力学差异。
 
+## `right_ankle_pitch_joint` 悬空工况补测
+
+| 参数 | 工况 | 结果 | 当前判断 |
+|---|---|---|---|
+| `kp=35, kd=0.5` | 悬空 | `tracking_ratio(window_mean) ≈ 0.921`，`peak_tracking_ratio ≈ 1.053`，`tail_tracking_ratio ≈ 0.965`，`overshoot_ratio ≈ 0.053`，`rise_time_sec ≈ 0.048`，`peak_time_sec ≈ 0.088` | 主轴幅值和时间响应已接近可用区间，但轮次间仍有轻度振荡与一致性问题，属于接近可用但未收口 |
+
+### `right pitch` 悬空工况阶段结论
+
+- `right_ankle_pitch_joint` 在悬空 `kp=35, kd=0.5` 下，与 `right roll` 的强分裂表现不同：
+  - 主轴峰值仅小幅超目标
+  - `active` 尾段已接近目标
+  - 时间预算满足 walking 需求
+- 当前主要问题不是明显欠跟踪，也不是明显过冲失控，而是：
+  - 不同轮次之间仍存在轻度振荡
+  - 响应一致性还不够稳定
+- 因此该点可视为 `right pitch` 的一个接近可用边缘点，值得在其附近继续微调，但不能直接收口。
+
+## `right_ankle_pitch_joint` 完全触地工况补测
+
+| 参数 | 工况 | 结果 | 当前判断 |
+|---|---|---|---|
+| `kp=20, kd=0.5` | 完全触地 | `tracking_ratio(window_mean) ≈ 0.453`，`peak_tracking_ratio ≈ 0.519`，`tail_tracking_ratio ≈ 0.519`，`peak_time_sec ≈ 0.384`，`response_class = undershoot_soft` | 稳定但明显欠跟踪，且峰值时间远超 walking 预算，不可用 |
+| `kp=35, kd=0.5` | 完全触地 | `tracking_ratio(window_mean) ≈ 0.442`，`peak_tracking_ratio ≈ 0.481`，`tail_tracking_ratio ≈ 0.481`，`peak_time_sec ≈ 0.338`，`response_class = undershoot_soft` | 明显欠跟踪且峰值时间远超 walking 预算，在完全触地工况下不可用 |
+| `kp=50, kd=0.5` | 完全触地 | `tracking_ratio(window_mean) ≈ 0.388`，`peak_tracking_ratio ≈ 0.435`，`tail_tracking_ratio ≈ 0.435`，重复间分裂明显：一轮极慢，另外两轮仅建立到约四分之一目标 | 不但未改善 `35/0.5`，反而引入更强的工况分裂，不应继续沿该方向收口 |
+| `kp=100, kd=0.5` | 完全触地 | `tracking_ratio(window_mean) ≈ 0.402`，`peak_tracking_ratio ≈ 0.477`，`tail_tracking_ratio ≈ 0.477`，重复间同样分裂：一轮幅值接近但时间极慢，另外两轮幅值仅约四分之一 | 在 `kd=0.5` 这条线上继续增大 `kp` 不能形成可用收敛方向 |
+
+### `right pitch` 触地/悬空对比结论
+
+- `right_ankle_pitch_joint` 在 `kp=35, kd=0.5` 下呈现出明显工况分裂：
+  - 悬空工况：主轴幅值和时间响应接近可用区间
+  - 完全触地工况：主轴只建立到目标的大约一半，且响应明显拖慢
+- 这说明该参数不是普遍有效点，而是一个“悬空可、触地不可”的对照点。
+- 对 `right pitch` 来说，当前不能沿 `35/0.5` 简单微调收口，而应重新围绕完全触地工况寻找可用区。
+- 从完全触地 `kd=0.5` 这一整条扫描看：
+  - `kp=20/35` 属于“稳定但明显不可用”
+  - `kp=50/100` 属于“更分裂、且同样不可用”
+- 因此对 `right pitch` 而言，`kd=0.5` 不是有效收敛支路，继续沿这条线加 `kp` 没有工程价值。
+
 ## 当前结论
 
 - 当前不能给四个自由度下“综合最优”定论。
 - 触地工况首轮数据显示：
   - 多个配置虽然没有超调、过零和振荡，但 `tracking_ratio` 只有约 `0.4 ~ 0.75`
   - 这说明系统主要问题之一仍是偏软欠跟踪，至少不能仅凭“无超调”就宣布收敛
-- 现阶段较合理的判断是：
+- 已形成的稳定结论：
+  - `right roll`：
+    - 触地下 `35/0.5` 与 `60/0.8` 只是相对较好对照点，不是收口值
+    - 悬空下 `kp=35` 配合 `kd=0.5/0.8/1.0` 均不成立：
+      - `0.5` 为持续振荡
+      - `0.8/1.0` 为单次过冲后回落
+    - 结论：`right roll` 当前主问题不是单纯沿 `kp=35` 微调 `kd`，而是接触耦合与悬空/触地等效动力学差异
+  - `right pitch`：
+    - 悬空 `35/0.5` 是“接近可用但未收口”的边缘点，不是部署候选
+    - 完全触地 `kd=0.5` 整条支路都不可用：
+      - `20/35` 稳定但明显欠跟踪
+      - `50/100` 更分裂且同样不可用
+    - 结论：`kd=0.5` 对 `right pitch` 不是有效收敛方向，应停止继续沿这条线扫描
+- 仍只能视为暂存判断的内容：
   - `right pitch kp=100, kd=0.8` 与 `right roll kp=60, kd=0.8` 在触地首轮中相对更接近可用
-  - `left pitch` 与 `left roll` 触地下仍偏软，需继续扫 `kp` 或复核测试一致性
-  - 是否需要调 `kd`，必须等悬空工况补齐后再判
-  - 对 `right roll` 来说，`kp=20/35/50, kd=0.5` 都稳定但欠跟踪，其中 `35/0.5` 是当前触地工况下较合理的对照点
-  - 但 `35/0.5` 的 `tracking_ratio` 也只有约 `0.67`，因此不能作为最终收敛值
-  - `right roll` 悬空工况下，`kp=35` 配合 `kd=0.5/0.8/1.0` 都不是收口点：
-    - `0.5` 是持续振荡
-    - `0.8/1.0` 虽更干净，但仍属于明显过冲后回落
-  - 因此 `right roll` 的当前主线不应再理解为“继续微调 `kp=35` 附近的 `kd` 就能收敛”，而应转向接触耦合与悬空/触地差异分析
+  - `left pitch` 与 `left roll` 触地下仍偏软，但由于缺少悬空对照，暂时不能决定是继续加 `kp` 还是转向 `kd/lpf`
 
 ## 后续动作
 
-- 先补四个自由度的悬空工况阶跃测试，沿用相同 `step_amplitude_rad = 0.015`。
-- `right_ankle_pitch_joint` 下一步优先测试悬空工况，建议先用 `kp=100, kd=0.8` 作为对照参数。
-- 对触地工况按新判据复排：
+- 先补 `left_ankle_pitch_joint` 与 `left_ankle_roll_joint` 的悬空工况阶跃测试，沿用相同 `step_amplitude_rad = 0.015`。
+- `right_ankle_pitch_joint` 下一步补悬空对照，优先测试 `kp=100, kd=0.8`。
+- 对全部触地工况按新判据复排：
   - 先看 `tracking_ratio`
   - 再看是否振荡、是否过零、是否耦合放大
 - 对 `tracking_ratio < 0.8` 的配置，不再写成“综合最优候选”。
