@@ -42,9 +42,11 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   };
 
   enum class TestMode { kStep, kSine };
+  enum class StartupPoseMode { kCurrent, kZero, kStand };
 
   bool LoadConfig();
   void PrepareTargets();
+  bool LoadStartupPoseTargets();
   void PrepareCsv();
   void MainLoop();
   void OnJointState(const std::shared_ptr<const sensor_msgs::msg::JointState>& msg);
@@ -53,7 +55,7 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   bool TryCaptureStableBaseline();
   double DesiredPrimaryVelocity(double local_time) const;
   void PublishHoldCommand();
-  void PublishCurrentPoseHoldCommand();
+  void PublishStartupPoseHoldCommand();
   std::pair<double, double> GetHoldGains(const std::string& joint_name) const;
   void SetJointCmd(my_ros2_proto::msg::JointCommand& cmd, const std::string& joint_name,
                    double position, double velocity, double effort, double kp, double kd);
@@ -76,6 +78,7 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   std::string primary_joint_;
   std::string coupled_joint_;
   std::string csv_path_ = "ankle_identification.csv";
+  std::string reference_control_cfg_path_ = "./cfg/control_module/rl_x1.yaml";
 
   double publish_rate_hz_ = 1000.0;
   double pre_hold_sec_ = 2.0;
@@ -101,6 +104,7 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   bool use_imu_ = true;
   bool auto_stop_after_test_ = true;
   TestMode test_mode_ = TestMode::kStep;
+  StartupPoseMode startup_pose_mode_ = StartupPoseMode::kZero;
 
   std::atomic_bool run_flag_{false};
   std::atomic_bool have_joint_index_{false};
@@ -113,6 +117,7 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   mutable std::mutex data_mutex_;
   std::unordered_map<std::string, size_t> joint_index_;
   std::unordered_map<std::string, JointSnapshot> latest_joint_state_;
+  std::unordered_map<std::string, double> startup_target_positions_;
   std::vector<std::string> joint_names_;
   my_ros2_proto::msg::JointCommand baseline_cmd_;
   sensor_msgs::msg::Imu latest_imu_;

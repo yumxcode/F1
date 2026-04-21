@@ -1,8 +1,10 @@
 joint_cmd_topic: /joint_cmd
 joint_state_topic: /joint_states
 imu_topic: /imu/data
+reference_control_cfg_path: ./cfg/control_module/rl_x1.yaml
 
 mode: step
+startup_pose_mode: zero
 test_side: left
 test_axis: pitch
 

@@ -22,6 +22,7 @@ bool AnkleIdentifierModule::Initialize(aimrt::CoreRef core) {
   try {
     if (!LoadConfig()) return false;
     PrepareTargets();
+    if (!LoadStartupPoseTargets()) return false;
     PrepareCsv();
 
     joint_state_sub_ = core_.GetChannelHandle().GetSubscriber(joint_state_topic_);
@@ -80,6 +81,8 @@ bool AnkleIdentifierModule::LoadConfig() {
   joint_cmd_topic_ = cfg_node["joint_cmd_topic"].as<std::string>("/joint_cmd");
   joint_state_topic_ = cfg_node["joint_state_topic"].as<std::string>("/joint_states");
   imu_topic_ = cfg_node["imu_topic"].as<std::string>("/imu/data");
+  reference_control_cfg_path_ =
+      cfg_node["reference_control_cfg_path"].as<std::string>("./cfg/control_module/rl_x1.yaml");
 
   const auto mode = cfg_node["mode"].as<std::string>("step");
   if (mode == "step") {
@@ -88,6 +91,18 @@ bool AnkleIdentifierModule::LoadConfig() {
     test_mode_ = TestMode::kSine;
   } else {
     AIMRT_ERROR("Unsupported mode {}", mode);
+    return false;
+  }
+
+  const auto startup_pose_mode = cfg_node["startup_pose_mode"].as<std::string>("zero");
+  if (startup_pose_mode == "current") {
+    startup_pose_mode_ = StartupPoseMode::kCurrent;
+  } else if (startup_pose_mode == "zero") {
+    startup_pose_mode_ = StartupPoseMode::kZero;
+  } else if (startup_pose_mode == "stand") {
+    startup_pose_mode_ = StartupPoseMode::kStand;
+  } else {
+    AIMRT_ERROR("Unsupported startup_pose_mode {}", startup_pose_mode);
     return false;
   }
 
@@ -140,6 +155,33 @@ void AnkleIdentifierModule::PrepareTargets() {
   }
 }
 
+bool AnkleIdentifierModule::LoadStartupPoseTargets() {
+  startup_target_positions_.clear();
+  if (startup_pose_mode_ == StartupPoseMode::kCurrent) return true;
+
+  YAML::Node cfg_node = YAML::LoadFile(reference_control_cfg_path_);
+  const auto joint_list = cfg_node["joint_list"].as<std::vector<std::string>>();
+  for (const auto& joint_name : joint_list) {
+    startup_target_positions_[joint_name] = 0.0;
+  }
+
+  if (startup_pose_mode_ == StartupPoseMode::kZero) return true;
+
+  const auto stand_cfg = cfg_node["controllers"]["pd_stand"];
+  const auto stand_joints = stand_cfg["joint_list"].as<std::vector<std::string>>();
+  const auto stand_init = stand_cfg["init_state"].as<std::vector<double>>();
+  if (stand_joints.size() != stand_init.size()) {
+    AIMRT_ERROR("pd_stand joint_list size {} != init_state size {}", stand_joints.size(),
+                stand_init.size());
+    return false;
+  }
+
+  for (size_t i = 0; i < stand_joints.size(); ++i) {
+    startup_target_positions_[stand_joints[i]] = stand_init[i];
+  }
+  return true;
+}
+
 void AnkleIdentifierModule::PrepareCsv() {
   const auto path = std::filesystem::path(csv_path_);
   if (path.has_parent_path()) {
@@ -166,7 +208,7 @@ void AnkleIdentifierModule::MainLoop() {
     }
 
     if (!baseline_captured_.load()) {
-      PublishCurrentPoseHoldCommand();
+      PublishStartupPoseHoldCommand();
       TryCaptureStableBaseline();
       std::this_thread::sleep_until(next_loop_time);
       continue;
@@ -338,17 +380,25 @@ void AnkleIdentifierModule::PublishHoldCommand() {
   aimrt::channel::Publish<my_ros2_proto::msg::JointCommand>(joint_cmd_pub_, baseline_cmd_);
 }
 
-void AnkleIdentifierModule::PublishCurrentPoseHoldCommand() {
+void AnkleIdentifierModule::PublishStartupPoseHoldCommand() {
   std::lock_guard<std::mutex> lock(data_mutex_);
   if (!have_joint_index_.load()) return;
 
   auto cmd = baseline_cmd_;
   for (size_t i = 0; i < joint_names_.size(); ++i) {
     const auto& joint_name = joint_names_[i];
-    const auto snapshot_it = latest_joint_state_.find(joint_name);
-    if (snapshot_it == latest_joint_state_.end()) continue;
     const auto [kp, kd] = GetHoldGains(joint_name);
-    cmd.position[i] = snapshot_it->second.position;
+    double target_position = 0.0;
+    if (startup_pose_mode_ == StartupPoseMode::kCurrent) {
+      const auto snapshot_it = latest_joint_state_.find(joint_name);
+      if (snapshot_it == latest_joint_state_.end()) continue;
+      target_position = snapshot_it->second.position;
+    } else {
+      const auto target_it = startup_target_positions_.find(joint_name);
+      if (target_it == startup_target_positions_.end()) continue;
+      target_position = target_it->second;
+    }
+    cmd.position[i] = target_position;
     cmd.velocity[i] = 0.0;
     cmd.effort[i] = 0.0;
     cmd.stiffness[i] = kp;
