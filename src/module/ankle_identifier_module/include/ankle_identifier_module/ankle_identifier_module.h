@@ -54,6 +54,7 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   double DesiredPrimaryVelocity(double local_time) const;
   void PublishHoldCommand();
   void PublishCurrentPoseHoldCommand();
+  std::pair<double, double> GetHoldGains(const std::string& joint_name) const;
   void SetJointCmd(my_ros2_proto::msg::JointCommand& cmd, const std::string& joint_name,
                    double position, double velocity, double effort, double kp, double kd);
   double GetBaseline(const std::string& joint_name) const;
@@ -87,6 +88,12 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   double test_kd_ = 0.8;
   double hold_kp_ = 30.0;
   double hold_kd_ = 1.0;
+  double torso_hold_kp_ = 500.0;
+  double torso_hold_kd_ = 5.0;
+  double arm_hold_kp_ = 80.0;
+  double arm_hold_kd_ = 1.5;
+  double leg_hold_kp_ = 300.0;
+  double leg_hold_kd_ = 5.0;
   double startup_stable_sec_ = 1.0;
   double startup_joint_vel_threshold_ = 0.05;
   double startup_gyro_threshold_ = 0.2;

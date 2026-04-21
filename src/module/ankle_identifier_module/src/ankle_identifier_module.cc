@@ -105,6 +105,12 @@ bool AnkleIdentifierModule::LoadConfig() {
   test_kd_ = cfg_node["test_kd"].as<double>(0.8);
   hold_kp_ = cfg_node["hold_kp"].as<double>(30.0);
   hold_kd_ = cfg_node["hold_kd"].as<double>(1.0);
+  torso_hold_kp_ = cfg_node["torso_hold_kp"].as<double>(500.0);
+  torso_hold_kd_ = cfg_node["torso_hold_kd"].as<double>(5.0);
+  arm_hold_kp_ = cfg_node["arm_hold_kp"].as<double>(80.0);
+  arm_hold_kd_ = cfg_node["arm_hold_kd"].as<double>(1.5);
+  leg_hold_kp_ = cfg_node["leg_hold_kp"].as<double>(300.0);
+  leg_hold_kd_ = cfg_node["leg_hold_kd"].as<double>(5.0);
   startup_stable_sec_ = cfg_node["startup_stable_sec"].as<double>(1.0);
   startup_joint_vel_threshold_ = cfg_node["startup_joint_vel_threshold"].as<double>(0.05);
   startup_gyro_threshold_ = cfg_node["startup_gyro_threshold"].as<double>(0.2);
@@ -193,6 +199,11 @@ void AnkleIdentifierModule::OnJointState(
     baseline_cmd_.effort.resize(joint_names_.size(), 0.0);
     baseline_cmd_.stiffness.resize(joint_names_.size(), hold_kp_);
     baseline_cmd_.damping.resize(joint_names_.size(), hold_kd_);
+    for (size_t i = 0; i < joint_names_.size(); ++i) {
+      const auto [kp, kd] = GetHoldGains(joint_names_[i]);
+      baseline_cmd_.stiffness[i] = kp;
+      baseline_cmd_.damping[i] = kd;
+    }
     have_joint_index_.store(true);
     AIMRT_INFO("Joint index initialized with {} joints.", joint_names_.size());
   }
@@ -336,13 +347,31 @@ void AnkleIdentifierModule::PublishCurrentPoseHoldCommand() {
     const auto& joint_name = joint_names_[i];
     const auto snapshot_it = latest_joint_state_.find(joint_name);
     if (snapshot_it == latest_joint_state_.end()) continue;
+    const auto [kp, kd] = GetHoldGains(joint_name);
     cmd.position[i] = snapshot_it->second.position;
     cmd.velocity[i] = 0.0;
     cmd.effort[i] = 0.0;
-    cmd.stiffness[i] = hold_kp_;
-    cmd.damping[i] = hold_kd_;
+    cmd.stiffness[i] = kp;
+    cmd.damping[i] = kd;
   }
   aimrt::channel::Publish<my_ros2_proto::msg::JointCommand>(joint_cmd_pub_, cmd);
+}
+
+std::pair<double, double> AnkleIdentifierModule::GetHoldGains(const std::string& joint_name) const {
+  if (joint_name.rfind("lumbar_", 0) == 0) {
+    return {torso_hold_kp_, torso_hold_kd_};
+  }
+  if (joint_name.find("shoulder_") != std::string::npos ||
+      joint_name.find("elbow_") != std::string::npos ||
+      joint_name.find("wrist_") != std::string::npos) {
+    return {arm_hold_kp_, arm_hold_kd_};
+  }
+  if (joint_name.find("hip_") != std::string::npos ||
+      joint_name.find("knee_") != std::string::npos ||
+      joint_name.find("ankle_") != std::string::npos) {
+    return {leg_hold_kp_, leg_hold_kd_};
+  }
+  return {hold_kp_, hold_kd_};
 }
 
 void AnkleIdentifierModule::SetJointCmd(my_ros2_proto::msg::JointCommand& cmd,
