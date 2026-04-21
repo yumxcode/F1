@@ -20,6 +20,9 @@ test_kp: 100
 test_kd: 0.8
 hold_kp: 30.0
 hold_kd: 1.0
+startup_stable_sec: 1.0
+startup_joint_vel_threshold: 0.05
+startup_gyro_threshold: 0.2
 
 use_imu: true
 auto_stop_after_test: true

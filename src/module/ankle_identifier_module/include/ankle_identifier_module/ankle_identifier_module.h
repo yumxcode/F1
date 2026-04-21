@@ -50,8 +50,10 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   void OnJointState(const std::shared_ptr<const sensor_msgs::msg::JointState>& msg);
   void OnImu(const std::shared_ptr<const sensor_msgs::msg::Imu>& msg);
   void StepControl(double elapsed_sec);
+  bool TryCaptureStableBaseline();
   double DesiredPrimaryVelocity(double local_time) const;
   void PublishHoldCommand();
+  void PublishCurrentPoseHoldCommand();
   void SetJointCmd(my_ros2_proto::msg::JointCommand& cmd, const std::string& joint_name,
                    double position, double velocity, double effort, double kp, double kd);
   double GetBaseline(const std::string& joint_name) const;
@@ -85,6 +87,9 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   double test_kd_ = 0.8;
   double hold_kp_ = 30.0;
   double hold_kd_ = 1.0;
+  double startup_stable_sec_ = 1.0;
+  double startup_joint_vel_threshold_ = 0.05;
+  double startup_gyro_threshold_ = 0.2;
   int repeat_count_ = 3;
   bool use_imu_ = true;
   bool auto_stop_after_test_ = true;
@@ -95,6 +100,7 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   std::atomic_bool baseline_captured_{false};
   std::atomic_bool test_completed_{false};
   std::atomic_bool completion_logged_{false};
+  std::atomic_bool startup_wait_logged_{false};
   std::thread main_thread_;
 
   mutable std::mutex data_mutex_;
@@ -104,6 +110,7 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   my_ros2_proto::msg::JointCommand baseline_cmd_;
   sensor_msgs::msg::Imu latest_imu_;
   std::chrono::steady_clock::time_point start_time_;
+  std::optional<std::chrono::steady_clock::time_point> startup_stable_since_;
   std::ofstream csv_;
 };
 

@@ -105,6 +105,9 @@ bool AnkleIdentifierModule::LoadConfig() {
   test_kd_ = cfg_node["test_kd"].as<double>(0.8);
   hold_kp_ = cfg_node["hold_kp"].as<double>(30.0);
   hold_kd_ = cfg_node["hold_kd"].as<double>(1.0);
+  startup_stable_sec_ = cfg_node["startup_stable_sec"].as<double>(1.0);
+  startup_joint_vel_threshold_ = cfg_node["startup_joint_vel_threshold"].as<double>(0.05);
+  startup_gyro_threshold_ = cfg_node["startup_gyro_threshold"].as<double>(0.2);
   use_imu_ = cfg_node["use_imu"].as<bool>(true);
   auto_stop_after_test_ = cfg_node["auto_stop_after_test"].as<bool>(true);
   csv_path_ = cfg_node["csv_path"].as<std::string>("ankle_identification.csv");
@@ -151,7 +154,14 @@ void AnkleIdentifierModule::MainLoop() {
   while (run_flag_.load()) {
     next_loop_time += period;
 
-    if (!have_joint_index_.load() || !baseline_captured_.load()) {
+    if (!have_joint_index_.load()) {
+      std::this_thread::sleep_until(next_loop_time);
+      continue;
+    }
+
+    if (!baseline_captured_.load()) {
+      PublishCurrentPoseHoldCommand();
+      TryCaptureStableBaseline();
       std::this_thread::sleep_until(next_loop_time);
       continue;
     }
@@ -194,15 +204,6 @@ void AnkleIdentifierModule::OnJointState(
         .effort = i < msg->effort.size() ? msg->effort[i] : 0.0};
   }
 
-  if (!baseline_captured_.load()) {
-    for (size_t i = 0; i < joint_names_.size(); ++i) {
-      baseline_cmd_.position[i] = latest_joint_state_[joint_names_[i]].position;
-    }
-    start_time_ = std::chrono::steady_clock::now();
-    baseline_captured_.store(true);
-    AIMRT_INFO("Baseline captured. Test joint: {}, coupled joint: {}", primary_joint_,
-               coupled_joint_);
-  }
 }
 
 void AnkleIdentifierModule::OnImu(const std::shared_ptr<const sensor_msgs::msg::Imu>& msg) {
@@ -261,6 +262,55 @@ void AnkleIdentifierModule::StepControl(double elapsed_sec) {
   LogSample(elapsed_sec, phase, iteration + 1, primary_target, coupled_target);
 }
 
+bool AnkleIdentifierModule::TryCaptureStableBaseline() {
+  std::lock_guard<std::mutex> lock(data_mutex_);
+  if (baseline_captured_.load()) return true;
+
+  const auto primary = latest_joint_state_[primary_joint_];
+  const auto coupled = latest_joint_state_[coupled_joint_];
+  const double max_joint_vel = std::max(std::abs(primary.velocity), std::abs(coupled.velocity));
+  const double gyro_norm =
+      std::sqrt(latest_imu_.angular_velocity.x * latest_imu_.angular_velocity.x +
+                latest_imu_.angular_velocity.y * latest_imu_.angular_velocity.y +
+                latest_imu_.angular_velocity.z * latest_imu_.angular_velocity.z);
+  const bool joint_stable = max_joint_vel <= startup_joint_vel_threshold_;
+  const bool imu_stable = !use_imu_ || gyro_norm <= startup_gyro_threshold_;
+  const bool stable_now = joint_stable && imu_stable;
+  const auto now = std::chrono::steady_clock::now();
+
+  if (!stable_now) {
+    startup_stable_since_.reset();
+    startup_wait_logged_.store(false);
+    return false;
+  }
+
+  if (!startup_stable_since_.has_value()) {
+    startup_stable_since_ = now;
+    if (!startup_wait_logged_.exchange(true)) {
+      AIMRT_INFO(
+          "Startup settle entered. Waiting {:.3f}s stable window before baseline capture. "
+          "joint_vel={:.5f}, gyro_norm={:.5f}",
+          startup_stable_sec_, max_joint_vel, gyro_norm);
+    }
+    return false;
+  }
+
+  const double stable_elapsed =
+      std::chrono::duration<double>(now - startup_stable_since_.value()).count();
+  if (stable_elapsed < startup_stable_sec_) return false;
+
+  for (size_t i = 0; i < joint_names_.size(); ++i) {
+    baseline_cmd_.position[i] = latest_joint_state_[joint_names_[i]].position;
+  }
+  start_time_ = now;
+  baseline_captured_.store(true);
+  AIMRT_INFO(
+      "Baseline captured after startup settle. Test joint: {}, coupled joint: {}, "
+      "joint_vel={:.5f}, gyro_norm={:.5f}",
+      primary_joint_, coupled_joint_, max_joint_vel, gyro_norm);
+  return true;
+}
+
 double AnkleIdentifierModule::DesiredPrimaryVelocity(double local_time) const {
   if (test_mode_ == TestMode::kSine &&
       local_time >= pre_hold_sec_ && local_time < pre_hold_sec_ + active_sec_) {
@@ -275,6 +325,24 @@ void AnkleIdentifierModule::PublishHoldCommand() {
   std::lock_guard<std::mutex> lock(data_mutex_);
   if (!baseline_captured_.load()) return;
   aimrt::channel::Publish<my_ros2_proto::msg::JointCommand>(joint_cmd_pub_, baseline_cmd_);
+}
+
+void AnkleIdentifierModule::PublishCurrentPoseHoldCommand() {
+  std::lock_guard<std::mutex> lock(data_mutex_);
+  if (!have_joint_index_.load()) return;
+
+  auto cmd = baseline_cmd_;
+  for (size_t i = 0; i < joint_names_.size(); ++i) {
+    const auto& joint_name = joint_names_[i];
+    const auto snapshot_it = latest_joint_state_.find(joint_name);
+    if (snapshot_it == latest_joint_state_.end()) continue;
+    cmd.position[i] = snapshot_it->second.position;
+    cmd.velocity[i] = 0.0;
+    cmd.effort[i] = 0.0;
+    cmd.stiffness[i] = hold_kp_;
+    cmd.damping[i] = hold_kd_;
+  }
+  aimrt::channel::Publish<my_ros2_proto::msg::JointCommand>(joint_cmd_pub_, cmd);
 }
 
 void AnkleIdentifierModule::SetJointCmd(my_ros2_proto::msg::JointCommand& cmd,
