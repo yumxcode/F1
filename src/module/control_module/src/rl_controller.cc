@@ -105,7 +105,7 @@ void RLController::Init(const YAML::Node& cfg_node) {
     // 40s * (1000Hz / decimation) 帧
     t2_log_max_count_ = 40 * (1000 / walk_step_conf_.decimation);
     t2_log_count_ = 0;
-    t2_logging_enabled_ = false;  // [T_M 专项测试] 暂禁用，仅启用 T_M
+    t2_logging_enabled_ = true;   // [T2 测试] 已启用
     t2_logging_triggered_ = false;
 
     // 初始化步态检测辅助变量

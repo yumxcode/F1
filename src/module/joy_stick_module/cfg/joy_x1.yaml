@@ -38,6 +38,8 @@ twist_pubs:
     # 固定速度（可选）：设置后忽略摇杆轴，使用以下固定值行走
     # 单位：linear m/s，angular rad/s；删除或注释此段恢复摇杆控制
     constant_velocity:
-      linear-x: 0.4
+      linear-x: 0.4    # 原版速度
+      # linear-x: 1.2       # 1.2m/s
+      # linear-x: 1.2   # 1.35m/s
       linear-y: 0.0
       angular-z: 0.0
