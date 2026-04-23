@@ -10,15 +10,17 @@ from datetime import datetime
 import glob
 
 def replay_dynamic():
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
     # ===============================
     # 配置参数 (用户可调)
     # ===============================
     USE_TARGET = False    # True: 使用 target_*_joint (控制器原始指令) | False: 使用 pos_*_joint (真机实际轨迹)
     FIX_IN_AIR = True   # True: 将机器人固定在空中 | False: 开启地面动力学仿真
     
-    RECORD_VIDEO = False # True: 开启视频录制 | False: 仅实时查看
+    RECORD_VIDEO = True # True: 开启视频录制 | False: 仅实时查看
     MAX_RECORD_TIME = 10.0 # 录制时长 (秒)，最长不要超过 CSV 记录的时长
-    VIDEO_DIR = "video"
+    VIDEO_DIR = os.path.join(BASE_DIR, "video")
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     VIDEO_PATH = f"{VIDEO_DIR}/replay_result_{timestamp}.mp4"
     if not os.path.exists(VIDEO_DIR):
@@ -28,10 +30,11 @@ def replay_dynamic():
     VIDEO_HEIGHT = 720
     # ===============================
 
-    xml_path = "src/module/sim_module/model/mjcf/xyber_x1_flat.xml"
-    
+    xml_path  = os.path.join(BASE_DIR, "src", "module", "sim_module", "model", "mjcf", "xyber_x1_flat.xml")
+    yaml_path = os.path.join(BASE_DIR, "src", "module", "control_module", "cfg", "rl_x1.yaml")
+
     # 查找特定的 csv 目录下最新的 t23 日志文件
-    csv_dir = "test_logs/data_csv"
+    csv_dir = os.path.join(BASE_DIR, "test_logs", "data_csv")
     search_pattern = os.path.join(csv_dir, "t23*.csv")
     t23_files = glob.glob(search_pattern)
     if t23_files:
@@ -40,9 +43,7 @@ def replay_dynamic():
         print(f"已自动选择最新的 t23 日志文件: {csv_path}")
     else:
         # 兜底文件路径
-        csv_path = "test_logs/data_csv/t23_joint_20260326_102002.csv"
-        
-    yaml_path = "src/module/control_module/cfg/rl_x1.yaml"
+        csv_path = os.path.join(csv_dir, "t23_joint_20260326_102002.csv")
 
     # 加载模型
     model = mujoco.MjModel.from_xml_path(xml_path)
