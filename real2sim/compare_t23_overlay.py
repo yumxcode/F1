@@ -17,8 +17,9 @@ USE_TARGET      = False    # True: target 轨迹 | False: pos 实际轨迹
 FIX_IN_AIR      = True     # True: 固定在空中 | False: 地面动力学
 RECORD_VIDEO    = False     # True: 同时录制视频
 MAX_RECORD_TIME = 10.0     # 播放/录制时长 (秒)
-ALPHA_OVERLAY   = 0.55     # Robot-2 叠加透明度 (0=全透明, 1=不透明)
-PLAYBACK_SPEED  = 0.5      # 播放速度倍率 (0.5=慢放, 1.0=正常, 2.0=快放)
+ALPHA_R1        = 0.5      # Robot-1 透明度 (0=全透明, 1=不透明)
+ALPHA_OVERLAY   = 0.5   # Robot-2 叠加透明度 (0=全透明, 1=不透明)
+PLAYBACK_SPEED  = 0.1      # 播放速度倍率 (0.5=慢放, 1.0=正常, 2.0=快放)
 CYCLE_ALIGN     = True     # True: 自动对齐两段 CSV 的步态周期起始相位
 ALIGN_JOINT     = "left_knee_pitch_joint"  # 用于周期检测的参考关节（膝关节峰值清晰）
 ALIGN_SKIP_SEC  = 0.5      # 跳过开头 N 秒的过渡段再开始检测
@@ -281,8 +282,8 @@ def compare_t23():
                 renderer2.update_scene(data2, camera=cam)
                 frame2 = renderer2.render().copy()  # RGB
 
-                # Alpha 叠加：Robot-1 正常 + Robot-2 蓝色半透明
-                blended = cv2.addWeighted(frame1, 1.0, frame2, ALPHA_OVERLAY, 0)
+                # Alpha 叠加：Robot-1 + Robot-2 各自透明度
+                blended = cv2.addWeighted(frame1, ALPHA_R1, frame2, ALPHA_OVERLAY, 0)
                 bgr     = cv2.cvtColor(blended, cv2.COLOR_RGB2BGR)
 
                 # ---- 图例 ----
