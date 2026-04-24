@@ -31,7 +31,16 @@ except ImportError:
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))          # real2sim/
 BASE_DIR   = os.path.dirname(SCRIPT_DIR)                          # project root
 
-DATA_FILE = os.path.join(SCRIPT_DIR, "t23_compare", "data", "t23_joint_real_new.csv")
+DATA_FILES = {
+    "real_new":    os.path.join(SCRIPT_DIR, "t23_compare", "data", "t23_joint_real_new.csv"),
+    "real_origin": os.path.join(SCRIPT_DIR, "t23_compare", "data", "t23_joint_real_origin.csv"),
+    "sim":         os.path.join(SCRIPT_DIR, "t23_compare", "data", "t23_joint_sim.csv"),
+}
+DATASET_STYLE = {
+    "real_new":    {"color": "#e41a1c", "ls": "-",  "lw": 1.6, "label": "Real New"},
+    "real_origin": {"color": "#377eb8", "ls": "--", "lw": 1.4, "label": "Real Origin"},
+    "sim":         {"color": "#4daf4a", "ls": ":",  "lw": 1.8, "label": "Sim"},
+}
 OUT_DIR   = os.path.join(SCRIPT_DIR, "table", "foot_contact")
 XML_PATH  = os.path.join(BASE_DIR, "src", "module", "sim_module", "model", "mjcf", "xyber_x1_flat.xml")
 YAML_PATH = os.path.join(BASE_DIR, "src", "module", "control_module", "cfg", "rl_x1.yaml")
@@ -45,6 +54,7 @@ FK_CONTACT_MARGIN = 0.04  # FK 法：min_z + margin 作为接地阈值 (m)
 SWING_MIN_DIST_S  = 0.30  # 膝关节法：swing 峰最小间距 (s)
 WINDOW_FRAMES     = 35    # IC 事件前后各显示多少帧（关节角图）
 BASE_Z            = 0.82  # FK 计算时固定躯干高度 (m)
+STANCE_OUTLIER_K  = 1.5   # 支撑时长离群值过滤：median ± K * IQR
 
 KNEE = {
     "left":  "left_knee_pitch_joint",
@@ -61,6 +71,20 @@ LEG_JOINTS = {
               "right_knee_pitch_joint", "right_ankle_pitch_joint","right_ankle_roll_joint"],
 }
 SIDE_COLOR = {"left": "#e41a1c", "right": "#377eb8"}   # red / blue
+
+
+# ── 支撑时长离群值过滤 ────────────────────────────────────────────────────────
+def filter_stance_outliers(ts, ic_frames, to_frames, k=STANCE_OUTLIER_K):
+    """移除支撑时长异常的步（减速/停步），返回过滤后的 ic_frames, to_frames。"""
+    if len(ic_frames) < 3:
+        return ic_frames, to_frames
+    durs = np.array([(ts[min(to, len(ts)-1)] - ts[ic]) for ic, to in zip(ic_frames, to_frames)])
+    q1, q3 = np.percentile(durs, 25), np.percentile(durs, 75)
+    iqr = q3 - q1
+    upper = q3 + k * iqr
+    keep = durs <= upper
+    return [ic for ic, m in zip(ic_frames, keep) if m], \
+           [to for to, m in zip(to_frames, keep) if m]
 
 
 # ── CSV 加载 ──────────────────────────────────────────────────────────────────
@@ -90,7 +114,11 @@ def compute_foot_z_fk(ts, data, joint_names,
     if not _HAS_MUJOCO or not os.path.exists(XML_PATH):
         return None
 
-    model   = mujoco.MjModel.from_xml_path(XML_PATH)
+    try:
+        model = mujoco.MjModel.from_xml_path(XML_PATH)
+    except (ValueError, Exception) as e:
+        print(f"  [warn] MuJoCo XML 加载失败，跳过 FK: {e}")
+        return None
     mj_data = mujoco.MjData(model)
     bid = {s: mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, FOOT_BODIES[s])
            for s in ["left", "right"]}
@@ -155,6 +183,7 @@ def detect_contacts_fk(ts, foot_z,
         ic_frames.append(ic_start)
         to_frames.append(end_idx)
 
+    ic_frames, to_frames = filter_stance_outliers(ts, ic_frames, to_frames)
     return ic_frames, to_frames, threshold
 
 
@@ -215,66 +244,108 @@ def detect_contacts_knee(ts, knee_pos,
                 break
         to_frames.append(to if to is not None else min(ic + search_limit, end_idx - 1))
 
+    ic_frames, to_frames = filter_stance_outliers(ts, ic_frames, to_frames)
     return ic_frames, to_frames, threshold, swing_peaks
 
 
-# ── 图1：时序总览图 ────────────────────────────────────────────────────────────
-def plot_timeline(ts, data, contacts_dict, output_path, foot_z=None):
+# ── 图1：多数据集时序对比图 ────────────────────────────────────────────────────
+def plot_timeline_comparison(all_results, output_path):
     """
-    foot_z: dict {"left": array, "right": array}，FK 法时传入；None 则退化为膝关节图。
+    all_results: OrderedDict { dataset_key: {
+        "ts", "data", "foot_z", "contacts", "use_fk"
+    }}
+    Overlays foot_z (or knee pitch) from all datasets on two subplots (left/right).
     """
-    t0    = ts[0]
-    t_rel = ts - t0
-    use_fk = foot_z is not None
-
-    fig, axes = plt.subplots(2, 1, figsize=(15, 7), sharex=True)
-    method_label = "FK ankle z" if use_fk else "knee pitch threshold"
-    fig.suptitle(f"Foot Contact Detection ({method_label}) — real_new",
-                 fontsize=13, fontweight="bold")
+    fig, axes = plt.subplots(2, 1, figsize=(16, 8), sharex=False)
+    any_fk = any(r["use_fk"] for r in all_results.values())
+    method_label = "FK ankle z" if any_fk else "knee pitch threshold"
+    fig.suptitle(f"Foot Contact Detection Comparison — {method_label}",
+                 fontsize=14, fontweight="bold")
 
     for ax, side in zip(axes, ["left", "right"]):
-        c = SIDE_COLOR[side]
-        ic_frames, to_frames, threshold = contacts_dict[side][:3]
-        swing_peaks = contacts_dict[side][3] if len(contacts_dict[side]) > 3 else []
+        for key, res in all_results.items():
+            style = DATASET_STYLE[key]
+            ts    = res["ts"]
+            t_rel = ts - ts[0]
 
-        if use_fk:
-            sig = foot_z[side]
-            sig_label  = f"{side} ankle z (FK)"
-            thresh_label = f"contact z < {threshold:.3f} m"
-            y_label = f"{side}\nankle z (m)"
-        else:
-            sig = data[f"pos_{KNEE[side]}"]
-            sig_label  = f"{side} knee pitch"
-            thresh_label = f"threshold = {threshold:.3f} rad"
-            y_label = f"{side}\nknee pitch (rad)"
+            if res["use_fk"] and res["foot_z"] is not None:
+                sig = res["foot_z"][side]
+                y_label = f"{side} ankle z (m)"
+            else:
+                sig = res["data"][f"pos_{KNEE[side]}"]
+                y_label = f"{side} knee pitch (rad)"
 
-        ax.plot(t_rel, sig, color=c, lw=1.4, label=sig_label)
+            ax.plot(t_rel, sig, color=style["color"], ls=style["ls"],
+                    lw=style["lw"], label=style["label"], alpha=0.85)
 
-        # 支撑相色带
-        for ic, to in zip(ic_frames, to_frames):
-            ax.axvspan(t_rel[ic], t_rel[min(to, len(t_rel)-1)],
-                       alpha=0.20, color=c)
+            # IC markers
+            ic_frames = res["contacts"][side][0]
+            ic_t = [t_rel[i] for i in ic_frames]
+            ic_v = [sig[i]   for i in ic_frames]
+            ax.scatter(ic_t, ic_v, marker="v", s=55, color=style["color"],
+                       zorder=7, edgecolors="k", linewidths=0.5)
 
-        # swing 峰（仅膝关节法有）
-        if len(swing_peaks):
-            ax.scatter(t_rel[swing_peaks], sig[swing_peaks],
-                       marker="^", s=55, color=c, zorder=6,
-                       label=f"swing peak ({len(swing_peaks)})")
+            # stance shading (light, only for first dataset to avoid clutter)
+            if key == list(all_results.keys())[0]:
+                to_frames = res["contacts"][side][1]
+                for ic, to in zip(ic_frames, to_frames):
+                    ax.axvspan(t_rel[ic], t_rel[min(to, len(t_rel)-1)],
+                               alpha=0.10, color=style["color"])
 
-        # IC 事件
-        ic_t = [t_rel[i] for i in ic_frames]
-        ic_v = [sig[i]   for i in ic_frames]
-        ax.scatter(ic_t, ic_v, marker="v", s=75, color="k", zorder=7,
-                   label=f"Initial Contact ({len(ic_frames)} events)")
-
-        ax.axhline(threshold, color=c, lw=1.0, ls="--", alpha=0.65,
-                   label=thresh_label)
-        ax.set_ylabel(y_label, fontsize=9)
-        ax.legend(fontsize=8, loc="upper right", ncol=2)
+        ax.set_ylabel(y_label, fontsize=10)
+        ax.legend(fontsize=9, loc="upper right", ncol=3)
         ax.grid(True, lw=0.4, alpha=0.5)
+        ax.set_title(f"{side.capitalize()} foot", fontsize=11, fontweight="bold")
 
     axes[-1].set_xlabel("Time (s)", fontsize=10)
-    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  保存: {output_path}")
+
+
+# ── 图1b：着地统计对比 ─────────────────────────────────────────────────────────
+def plot_contact_summary(all_results, output_path):
+    """Bar chart: IC count + mean stance duration per dataset/side."""
+    datasets = list(all_results.keys())
+    sides    = ["left", "right"]
+    n_ds     = len(datasets)
+    x        = np.arange(len(sides))
+    width    = 0.22
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5))
+    fig.suptitle("Contact Event Statistics Comparison", fontsize=13, fontweight="bold")
+
+    for i, key in enumerate(datasets):
+        style = DATASET_STYLE[key]
+        res   = all_results[key]
+        counts, durations = [], []
+        for side in sides:
+            ic = res["contacts"][side][0]
+            to = res["contacts"][side][1]
+            ts = res["ts"]
+            counts.append(len(ic))
+            durs = [(ts[min(t, len(ts)-1)] - ts[c]) * 1000 for c, t in zip(ic, to)]
+            durations.append(np.mean(durs) if durs else 0)
+
+        offset = (i - (n_ds - 1) / 2) * width
+        ax1.bar(x + offset, counts, width, label=style["label"],
+                color=style["color"], alpha=0.8)
+        ax2.bar(x + offset, durations, width, label=style["label"],
+                color=style["color"], alpha=0.8)
+
+    for ax, ylabel, title in [
+        (ax1, "IC count", "Number of Initial Contacts"),
+        (ax2, "mean stance (ms)", "Mean Stance Duration"),
+    ]:
+        ax.set_xticks(x)
+        ax.set_xticklabels([s.capitalize() for s in sides])
+        ax.set_ylabel(ylabel)
+        ax.set_title(title, fontsize=11)
+        ax.legend(fontsize=8)
+        ax.grid(axis="y", lw=0.4, alpha=0.5)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.93])
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"  保存: {output_path}")
@@ -329,9 +400,17 @@ def plot_contact_poses(ts, data, ic_frames, side, output_path,
     print(f"  保存: {output_path}")
 
 
-# ── 图3：MuJoCo 渲染姿态网格 ──────────────────────────────────────────────────
-def render_mujoco_poses(ts, data, ic_frames, side, joint_names, output_path,
-                        cam_azimuth=None, view_label=""):
+# ── 图3：三数据集 MuJoCo 对比渲染（3行，每行独立 IC）──────────────────────────
+# 行顺序：Sim → Real Origin → Real New
+ROW_ORDER = ["sim", "real_origin", "real_new"]
+
+def render_mujoco_comparison(all_results, side, joint_names, output_path,
+                             cam_azimuth=None, view_label=""):
+    """
+    三行对比渲染：每行一个数据集。
+    列数 = real_new 的 IC 数（基准），多的截断，少的留空。
+    每张图保证是该脚（left/right）的真实着地时刻，数据集间时间戳独立。
+    """
     try:
         import mujoco
     except ImportError:
@@ -341,12 +420,24 @@ def render_mujoco_poses(ts, data, ic_frames, side, joint_names, output_path,
         print(f"  [skip] XML 不存在: {XML_PATH}")
         return
 
-    t0  = ts[0]
-    n   = len(ic_frames)
-    if n == 0:
+    available = [k for k in ROW_ORDER if k in all_results]
+    if not available:
         return
 
-    model   = mujoco.MjModel.from_xml_path(XML_PATH)
+    # 列数以 real_new 为基准，多的截断，少的留空
+    REF_KEY = "real_new"
+    ic_per_ds = {k: all_results[k]["contacts"][side][0] for k in available}
+    if REF_KEY not in ic_per_ds or len(ic_per_ds[REF_KEY]) == 0:
+        print(f"  [skip] {side}: 基准数据集 {REF_KEY} 无 IC 事件")
+        return
+    n_cols = len(ic_per_ds[REF_KEY])
+
+    # 加载模型
+    try:
+        model = mujoco.MjModel.from_xml_path(XML_PATH)
+    except (ValueError, Exception) as e:
+        print(f"  [skip] MuJoCo XML 加载失败: {e}")
+        return
     mj_data = mujoco.MjData(model)
     model.vis.global_.offwidth  = 1280
     model.vis.global_.offheight = 960
@@ -362,47 +453,82 @@ def render_mujoco_poses(ts, data, ic_frames, side, joint_names, output_path,
     cam.elevation  = -3.0
     cam.lookat     = np.array([0.0, 0.0, 0.10])
 
-    frames = []
-    for ic in ic_frames:
-        mujoco.mj_resetData(model, mj_data)
-        for j in joint_names:
-            jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, j)
-            if jid == -1:
-                continue
-            col = f"pos_{j}"
-            if col in data:
-                mj_data.qpos[model.jnt_qposadr[jid]] = data[col][ic]
-        mj_data.qpos[2] = 0.82   # 近似站立高度
-        mujoco.mj_forward(model, mj_data)
-        renderer.update_scene(mj_data, camera=cam)
-        frames.append(renderer.render().copy())
+    # 逐数据集渲染（每行渲染自己的全部 IC）
+    rendered = {}   # key -> [image, ...]
+    ic_times = {}   # key -> [relative seconds, ...]
 
-    ncols = 5
-    nrows = (n + ncols - 1) // ncols
-    fig, axes = plt.subplots(nrows, ncols,
-                             figsize=(ncols * 4.8, nrows * 4.0),
+    for key in available:
+        res  = all_results[key]
+        ts   = res["ts"]
+        data = res["data"]
+        ics  = ic_per_ds[key][:n_cols]  # 截断到基准列数
+
+        frames = []
+        times  = []
+        for ic in ics:
+            mujoco.mj_resetData(model, mj_data)
+            for j in joint_names:
+                jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, j)
+                if jid == -1:
+                    continue
+                col = f"pos_{j}"
+                if col in data:
+                    mj_data.qpos[model.jnt_qposadr[jid]] = data[col][ic]
+            mj_data.qpos[2] = 0.82
+            mujoco.mj_forward(model, mj_data)
+            renderer.update_scene(mj_data, camera=cam)
+            frames.append(renderer.render().copy())
+            times.append(ts[ic] - ts[0])
+
+        rendered[key] = frames
+        ic_times[key] = times
+
+    # ── 绘图：3行 × n_cols列 ─────────────────────────────────────────────────
+    n_rows = len(available)
+    fig, axes = plt.subplots(n_rows, n_cols,
+                             figsize=(n_cols * 4.0, n_rows * 3.8),
                              squeeze=False)
-    view_tag = f" [{view_label}]" if view_label else ""
-    title = f"{side.capitalize()} Foot — {n} IC Poses{view_tag}"
-    fig.suptitle(title, fontsize=13, fontweight="bold")
-
-    for idx, (frame, ic) in enumerate(zip(frames, ic_frames)):
-        ax = axes[idx // ncols][idx % ncols]
-        ax.imshow(frame, interpolation="lanczos")
-        ax.set_title(f"#{idx + 1}  t={ts[ic] - t0:.2f}s", fontsize=10)
-        ax.axis("off")
-
-    for idx in range(n, nrows * ncols):
-        axes[idx // ncols][idx % ncols].set_visible(False)
-
     fig.patch.set_facecolor("#111111")
-    for ax_row in axes:
-        for ax in ax_row:
-            ax.set_facecolor("#111111")
-            ax.title.set_color("white")
-    fig.suptitle(title, fontsize=13, fontweight="bold", color="white")
 
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    view_tag = f" [{view_label}]" if view_label else ""
+    title = f"{side.capitalize()} Foot IC Comparison{view_tag}"
+    fig.suptitle(title, fontsize=14, fontweight="bold", color="white")
+
+    for row, key in enumerate(available):
+        style  = DATASET_STYLE[key]
+        n_ic   = len(rendered[key])
+
+        for col in range(n_cols):
+            ax = axes[row][col]
+            ax.set_facecolor("#111111")
+            ax.axis("off")
+
+            if col < n_ic:
+                ax.imshow(rendered[key][col], interpolation="lanczos")
+
+                # 右下角：该数据集自己的时间戳
+                ax.text(0.97, 0.03, f"t={ic_times[key][col]:.2f}s",
+                        transform=ax.transAxes, fontsize=8, color="white",
+                        ha="right", va="bottom",
+                        bbox=dict(facecolor="black", alpha=0.6,
+                                  pad=2, edgecolor="none"))
+
+                # 列标题：仅顶行，显示该行的第 col+1 次 IC
+                if row == 0:
+                    ax.set_title(f"#{col + 1}", fontsize=10, color="white",
+                                 fontweight="bold", pad=6)
+            else:
+                # 该数据集无此周期，留空
+                ax.set_visible(False)
+
+        # 行标签（第一列左侧）
+        axes[row][0].text(-0.08, 0.5,
+                          f"{style['label']}\n({n_ic} IC)",
+                          transform=axes[row][0].transAxes,
+                          fontsize=12, fontweight="bold", color=style["color"],
+                          ha="right", va="center", rotation=90)
+
+    plt.tight_layout(rect=[0.07, 0, 1, 0.94])
     fig.savefig(output_path, dpi=180, bbox_inches="tight",
                 facecolor=fig.get_facecolor())
     plt.close(fig)
@@ -410,43 +536,36 @@ def render_mujoco_poses(ts, data, ic_frames, side, joint_names, output_path,
 
 
 # ── 主逻辑 ────────────────────────────────────────────────────────────────────
-def main():
-    print("加载数据...")
-    ts, data = load_csv(DATA_FILE)
+def process_dataset(key, path, joint_names):
+    """加载一个数据集并运行 FK + 接地检测，返回结果 dict。"""
+    label = DATASET_STYLE[key]["label"]
+    print(f"\n{'='*60}")
+    print(f"  [{label}]  {os.path.basename(path)}")
+    print(f"{'='*60}")
+
+    ts, data = load_csv(path)
     t0 = ts[0]
     dt = float(np.median(np.diff(ts)))
     print(f"  {len(ts)} 帧，{dt*1000:.1f}ms 间隔，总时长 {ts[-1]-t0:.1f}s")
 
-    # ── 读取 joint_names ─────────────────────────────────────────────────────
-    joint_names = list(LEG_JOINTS["left"]) + list(LEG_JOINTS["right"])
-    if _HAS_MUJOCO and os.path.exists(YAML_PATH):
-        try:
-            with open(YAML_PATH) as f:
-                joint_names = yaml.safe_load(f)["controllers"]["rl_walk_leg"]["joint_list"]
-        except Exception:
-            pass
-
-    # ── FK：批量计算脚踝 z ───────────────────────────────────────────────────
+    # FK
     foot_z = None
     if _HAS_MUJOCO and os.path.exists(XML_PATH):
-        print("\n运行 FK 计算脚踝高度...")
         foot_z = compute_foot_z_fk(ts, data, joint_names)
         if foot_z is not None:
             for s in ["left", "right"]:
                 valid = ~np.isnan(foot_z[s])
-                print(f"  {s} ankle z: min={foot_z[s][valid].min():.4f}  "
-                      f"max={foot_z[s][valid].max():.4f} m  "
-                      f"contact thresh={foot_z[s][valid].min()+FK_CONTACT_MARGIN:.4f} m")
+                if valid.any():
+                    print(f"  {s} ankle z: min={foot_z[s][valid].min():.4f}  "
+                          f"max={foot_z[s][valid].max():.4f} m")
 
-    # ── 接地检测 ─────────────────────────────────────────────────────────────
-    print("\n检测脚掌着地事件...")
-    contacts = {}
+    # 接地检测
     use_fk = foot_z is not None
-
+    contacts = {}
     for side in ["left", "right"]:
         if use_fk:
             ic_frames, to_frames, thresh = detect_contacts_fk(ts, foot_z[side])
-            contacts[side] = (ic_frames, to_frames, thresh)   # 无 swing_peaks
+            contacts[side] = (ic_frames, to_frames, thresh)
             unit = "m"
         else:
             ic_frames, to_frames, thresh, swing_peaks = detect_contacts_knee(
@@ -457,29 +576,55 @@ def main():
         durations = [(ts[min(to, len(ts)-1)] - ts[ic]) * 1000
                      for ic, to in zip(ic_frames, to_frames)]
         method_tag = "FK" if use_fk else "knee"
-        print(f"  [{method_tag}] {side}: {len(ic_frames)} 次着地  "
-              f"阈值={thresh:.4f} {unit}")
-        print(f"    着地时刻(s): {[f'{ts[i]-t0:.2f}' for i in ic_frames]}")
-        if durations:
-            print(f"    支撑时长(ms): avg={np.mean(durations):.0f}  "
-                  f"min={np.min(durations):.0f}  max={np.max(durations):.0f}")
+        print(f"  [{method_tag}] {side}: {len(ic_frames)} IC  "
+              f"thresh={thresh:.4f} {unit}  "
+              f"stance_ms={'%.0f' % np.mean(durations) if durations else 'N/A'}")
 
-    print("生成 MuJoCo 渲染姿态图...")
+    return {"ts": ts, "data": data, "foot_z": foot_z,
+            "contacts": contacts, "use_fk": use_fk}
+
+
+def main():
+    # ── 读取 joint_names ─────────────────────────────────────────────────────
+    joint_names = list(LEG_JOINTS["left"]) + list(LEG_JOINTS["right"])
+    if _HAS_MUJOCO and os.path.exists(YAML_PATH):
+        try:
+            with open(YAML_PATH) as f:
+                joint_names = yaml.safe_load(f)["controllers"]["rl_walk_leg"]["joint_list"]
+        except Exception:
+            pass
+
+    # ── 加载并处理所有数据集 ─────────────────────────────────────────────────
+    from collections import OrderedDict
+    all_results = OrderedDict()
+    for key, path in DATA_FILES.items():
+        if not os.path.exists(path):
+            print(f"  [skip] {DATASET_STYLE[key]['label']}: 文件不存在 {path}")
+            continue
+        all_results[key] = process_dataset(key, path, joint_names)
+
+    if not all_results:
+        print("无可用数据集，退出。")
+        return
+
+    # ── 三数据集对比渲染（3行 × N列，按最小周期数对齐）──────────────────────
+    print("\n生成三数据集对比 MuJoCo 渲染...")
     views = [
-        ("side",  None,   "Side"),     # None -> auto ±90° per foot
+        ("side",  None,   "Side"),
         ("front",  0.0,  "Front"),
         ("back",  180.0, "Back"),
     ]
     for side in ["left", "right"]:
         for view_name, azimuth, label in views:
-            render_mujoco_poses(
-                ts, data, contacts[side][0], side, joint_names,
+            render_mujoco_comparison(
+                all_results, side, joint_names,
                 os.path.join(OUT_DIR, f"03_{side}_{view_name}.png"),
                 cam_azimuth=azimuth,
                 view_label=label,
             )
 
-    print("\n完成！输出目录:", OUT_DIR)
+    print(f"\n完成！输出目录: {OUT_DIR}")
+    print(f"  数据集: {', '.join(DATASET_STYLE[k]['label'] for k in all_results)}")
 
 
 if __name__ == "__main__":
