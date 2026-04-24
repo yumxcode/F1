@@ -158,7 +158,7 @@ void RLController::Init(const YAML::Node& cfg_node) {
   propri_history_buffer_.resize(onnx_conf_.observations_size * onnx_conf_.num_hist);
   low_pass_filters_.clear();
   for (size_t i = 0; i < onnx_conf_.actions_size; ++i) {
-    low_pass_filters_.emplace_back(100, 0.001);
+    low_pass_filters_.emplace_back(lpf_conf_.wc, lpf_conf_.ts);
   }
 }
 
