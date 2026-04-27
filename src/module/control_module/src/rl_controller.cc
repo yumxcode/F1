@@ -607,7 +607,7 @@ void RLController::LogT2Data() {
     if (t2_joint_file_.is_open()) {
       t2_joint_file_ << "timestamp_ns";
       for (const auto& name : joint_names_) {
-        t2_joint_file_ << ",pos_" << name << ",vel_" << name << ",target_" << name;
+        t2_joint_file_ << ",pos_" << name << ",vel_" << name << ",target_" << name << ",target_lpf_" << name;
       }
       t2_joint_file_ << "\n";
     }
@@ -682,7 +682,8 @@ void RLController::LogT2Data() {
 
       t2_joint_file_ << "," << propri_.joint_pos(ii)
                      << "," << propri_.joint_vel(ii)
-                     << "," << pos_target;
+                     << "," << pos_target
+                     << "," << low_pass_filters_[ii].output();
     }
     t2_joint_file_ << "\n";
   }
@@ -713,9 +714,17 @@ void RLController::LogT2Data() {
   }
 
   t2_log_count_++;
+
+  // ---- T2 进度打印（每 5000 帧 ≈ 5s 打印一次）----
   if (t2_log_count_ % 5000 == 0) {
-    fprintf(stderr, "[RLController] T2 logging progress: %d/%d frames\n", t2_log_count_, t2_log_max_count_);
+    double pct = 100.0 * t2_log_count_ / t2_log_max_count_;
+    double elapsed_s = t2_log_count_ * 0.001 * walk_step_conf_.decimation;  // 帧数 → 秒
+    double total_s   = t2_log_max_count_ * 0.001 * walk_step_conf_.decimation;
+    double remain_s  = total_s - elapsed_s;
+    fprintf(stderr, "[RLController] T2 progress: %d/%d frames (%.0f%%), elapsed %.1fs, remaining %.1fs\n",
+            t2_log_count_, t2_log_max_count_, pct, elapsed_s, remain_s);
   }
+
   if (t2_log_count_ >= t2_log_max_count_) {
     t2_gait_file_.flush();
     t2_gait_file_.close();
@@ -727,7 +736,8 @@ void RLController::LogT2Data() {
     t2_action_file_.close();
     t2_logging_triggered_ = false;
     walk_leg_entered_.store(false, std::memory_order_release);
-    fprintf(stderr, "[RLController] T2 CSV logging finished (%d frames, 40s)\n", t2_log_count_);
+    double total_s = t2_log_max_count_ * 0.001 * walk_step_conf_.decimation;
+    fprintf(stderr, "[RLController] T2 CSV logging finished (%d frames, %.0fs)\n", t2_log_count_, total_s);
   }
 }
 
