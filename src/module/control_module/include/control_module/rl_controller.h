@@ -94,6 +94,7 @@ class RLController : public ControllerBase {
   std::ofstream round3_diag_file_;
   bool round3_diag_logging_enabled_{false};
   bool round3_diag_logging_triggered_{false};
+  bool round3_diag_pending_frame_{false};
   int round3_diag_log_count_{0};
   int round3_diag_log_max_count_{0};
   std::string round3_diag_log_dir_;

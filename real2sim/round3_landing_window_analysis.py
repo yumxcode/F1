@@ -91,6 +91,16 @@ def latest_round3_diag() -> str:
     return matches[-1]
 
 
+def parse_csv_scalar(key: str, value):
+    if key is None:
+        return None
+    if value is None or value == "":
+        return math.nan if key != "timestamp_ns" else None
+    if key == "timestamp_ns":
+        return int(value)
+    return float(value)
+
+
 def load_csv(path: str):
     rows = []
     with open(path, "r", newline="") as handle:
@@ -98,7 +108,12 @@ def load_csv(path: str):
         for raw in reader:
             row = {}
             for key, value in raw.items():
-                row[key] = float(value) if key != "timestamp_ns" else int(value)
+                parsed = parse_csv_scalar(key, value)
+                if key is None:
+                    continue
+                row[key] = parsed
+            if row.get("timestamp_ns") is None:
+                continue
             row["time_sec"] = row["timestamp_ns"] / 1e9
             rows.append(row)
     if not rows:

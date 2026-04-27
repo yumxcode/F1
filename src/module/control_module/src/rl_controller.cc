@@ -104,10 +104,12 @@ void RLController::Init(const YAML::Node& cfg_node) {
   round3_diag_log_count_ = 0;
   round3_diag_logging_enabled_ = true;
   round3_diag_logging_triggered_ = false;
+  round3_diag_pending_frame_ = false;
 }
 
 void RLController::RestartController() {
   is_first_frame_ = true;
+  round3_diag_pending_frame_ = false;
 }
 
 void RLController::Update() {
@@ -116,9 +118,7 @@ void RLController::Update() {
   if (loop_count_ % walk_step_conf_.decimation == 0) {
     ComputeObservation();
     ComputeActions();
-    if (round3_diag_logging_enabled_) {
-      LogRound3DiagnosticData();
-    }
+    round3_diag_pending_frame_ = round3_diag_logging_enabled_;
   }
 
   loop_count_++;
@@ -173,6 +173,10 @@ my_ros2_proto::msg::JointCommand RLController::GetJointCmdData() {
       joint_cmd.damping[ii] = 0.0;
     }
     last_actions_(ii, 0) = actions_[ii];
+  }
+  if (round3_diag_pending_frame_) {
+    LogRound3DiagnosticData();
+    round3_diag_pending_frame_ = false;
   }
   return joint_cmd;
 }
