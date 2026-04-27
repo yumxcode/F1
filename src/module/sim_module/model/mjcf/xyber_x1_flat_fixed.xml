@@ -1,0 +1,13 @@
+<mujoco model = "zhiyuan scene fixed">
+
+    <include file = "robot/xyber_x1/xyber_x1_serial.xml" />
+    <include file = "environment/flat.xml" />
+
+    <!-- Fix the base body at its initial position (like hanging from a rope) -->
+    <!-- No relpose = use initial config pose (0,0,0.7). Gravity still acts on limbs. -->
+    <!-- solref timeconst (0.005) must be > timestep (0.001) to avoid divergence -->
+    <equality>
+        <weld body1="x1-body" solref="0.005 1" solimp="0.999 0.999 0.001 0.5 2" />
+    </equality>
+
+</mujoco>

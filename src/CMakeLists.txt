@@ -16,6 +16,7 @@ add_subdirectory(module/dcu_driver_module)
 add_subdirectory(module/joy_stick_module)
 add_subdirectory(module/control_module)
 add_subdirectory(module/sim_module)
+add_subdirectory(module/ankle_identifier_module)
 
 # pkg
 add_subdirectory(pkg/pkg1)
