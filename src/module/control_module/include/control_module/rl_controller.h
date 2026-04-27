@@ -188,6 +188,28 @@ class RLController : public ControllerBase {
   int  tm25_log_max_count_{0};
 
   void LogTm25Data();
+
+  // Round 3 摆腿清高与落地窗口联合诊断日志（walk_leg 触发，策略频率）
+  std::ofstream round3_diag_file_;
+  bool round3_diag_logging_enabled_{false};
+  bool round3_diag_logging_triggered_{false};
+  int round3_diag_log_count_{0};
+  int round3_diag_log_max_count_{0};
+  std::string round3_diag_log_dir_;
+
+  std::vector<double> last_pos_des_raw_;
+  std::vector<double> last_pos_des_lpf_;
+  std::vector<double> last_tau_des_raw_;
+  std::vector<double> last_tau_des_lpf_;
+  std::vector<int> last_is_parallel_joint_;
+
+  double last_phase_sin_{0.0};
+  double last_phase_cos_{1.0};
+  double last_cmd_linear_x_{0.0};
+  double last_cmd_linear_y_{0.0};
+  double last_cmd_angular_z_{0.0};
+
+  void LogRound3DiagnosticData();
 };
 
 }  // namespace xyber_x1_infer::rl_control_module

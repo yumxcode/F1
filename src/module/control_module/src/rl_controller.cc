@@ -1,6 +1,7 @@
 #include "control_module/rl_controller.h"
 #include <string.h>
 #include <iostream>
+#include <limits>
 
 namespace xyber_x1_infer::rl_control_module {
 
@@ -199,6 +200,23 @@ void RLController::Init(const YAML::Node& cfg_node) {
   for (size_t i = 0; i < onnx_conf_.actions_size; ++i) {
     low_pass_filters_.emplace_back(100, 0.001);
   }
+
+  last_pos_des_raw_.assign(onnx_conf_.actions_size, std::numeric_limits<double>::quiet_NaN());
+  last_pos_des_lpf_.assign(onnx_conf_.actions_size, std::numeric_limits<double>::quiet_NaN());
+  last_tau_des_raw_.assign(onnx_conf_.actions_size, std::numeric_limits<double>::quiet_NaN());
+  last_tau_des_lpf_.assign(onnx_conf_.actions_size, std::numeric_limits<double>::quiet_NaN());
+  last_is_parallel_joint_.assign(onnx_conf_.actions_size, 0);
+
+  {
+    round3_diag_log_dir_ = "test_logs/data_csv";
+    std::filesystem::create_directories(round3_diag_log_dir_);
+    round3_diag_log_max_count_ = 40 * (1000 / walk_step_conf_.decimation);
+    round3_diag_log_count_ = 0;
+    round3_diag_logging_enabled_ = true;
+    round3_diag_logging_triggered_ = false;
+    fprintf(stderr, "[RLController] Round3 diagnostic logging enabled (max %d frames @ %dHz)\n",
+            round3_diag_log_max_count_, 1000 / walk_step_conf_.decimation);
+  }
 }
 
 void RLController::RestartController() {
@@ -220,6 +238,10 @@ void RLController::Update() {
     // T3 数据采集（仅在 decimation 周期记录，与策略同频）
     if (t3_logging_enabled_) {
       LogT3Data();
+    }
+
+    if (round3_diag_logging_enabled_) {
+      LogRound3DiagnosticData();
     }
 
     // T_M Step 1: 网络输入观测向量记录（在 ComputeActions 调用后，observations_ 已填充完毕）
@@ -248,25 +270,35 @@ my_ros2_proto::msg::JointCommand RLController::GetJointCmdData() {
     scalar_t pos_des = actions_[ii] * walk_step_conf_.action_scale + joint_conf_.init_state(ii);
     double stiffness = joint_conf_.stiffness(ii);
     double damping = joint_conf_.damping(ii);
+    last_pos_des_raw_[ii] = pos_des;
+    last_pos_des_lpf_[ii] = std::numeric_limits<double>::quiet_NaN();
+    last_tau_des_raw_[ii] = std::numeric_limits<double>::quiet_NaN();
+    last_tau_des_lpf_[ii] = std::numeric_limits<double>::quiet_NaN();
 
     //  ------
     //  yumx关节物理限位 clamp（在低通滤波前，避免滤波器记忆超量值）
     pos_des = std::max(static_cast<scalar_t>(joint_conf_.pos_limit_lower(ii)),
                        std::min(static_cast<scalar_t>(joint_conf_.pos_limit_upper(ii)), pos_des));
+    last_pos_des_raw_[ii] = pos_des;
 
     //  ---------
     if (lpf_conf_.paralle_list.find(joint_names_[ii]) == lpf_conf_.paralle_list.end()) {
+      last_is_parallel_joint_[ii] = 0;
       low_pass_filters_[ii].input(pos_des);
       double pos_des_lp = low_pass_filters_[ii].output();
+      last_pos_des_lpf_[ii] = pos_des_lp;
       joint_cmd.position[ii] = pos_des_lp;
       joint_cmd.velocity[ii] = 0.0;
       joint_cmd.effort[ii] = 0.0;
       joint_cmd.stiffness[ii] = stiffness;
       joint_cmd.damping[ii] = damping;
     } else {
+      last_is_parallel_joint_[ii] = 1;
       double tau_des = stiffness * (pos_des - propri_.joint_pos[ii]) + damping * (0.0 - propri_.joint_vel[ii]);
+      last_tau_des_raw_[ii] = tau_des;
       low_pass_filters_[ii].input(tau_des);
       double tau_des_lp = low_pass_filters_[ii].output();
+      last_tau_des_lpf_[ii] = tau_des_lp;
       joint_cmd.position[ii] = 0.0;
       joint_cmd.velocity[ii] = 0.0;
       joint_cmd.effort[ii] = tau_des_lp;
@@ -348,10 +380,15 @@ void RLController::ComputeObservation() {
       }
     }
     phase = phase / walk_step_conf_.cycle_time;
+    last_phase_sin_ = sin(2 * M_PI * phase);
+    last_phase_cos_ = cos(2 * M_PI * phase);
+    last_cmd_linear_x_ = joy_data_.linear.x;
+    last_cmd_linear_y_ = joy_data_.linear.y;
+    last_cmd_angular_z_ = joy_data_.angular.z;
 
     // clang-format off
-    propri_obs << sin(2 * M_PI * phase),  // 1
-                  cos(2 * M_PI * phase),  // 1
+    propri_obs << last_phase_sin_,  // 1
+                  last_phase_cos_,  // 1
                   joy_data_.linear.x * obs_scales_.lin_vel, // 1
                   joy_data_.linear.y * obs_scales_.lin_vel, // 1
                   joy_data_.angular.z, // 1
@@ -1295,6 +1332,110 @@ void RLController::LogTm25Data() {
     tm25_action_file_.close();
     tm25_logging_triggered_ = false;
     fprintf(stderr, "[RLController] T_M25 action logging finished (%d frames, 20s)\n", tm25_log_count_);
+  }
+}
+
+void RLController::LogRound3DiagnosticData() {
+  bool walk_entered = walk_leg_entered_.load(std::memory_order_acquire);
+
+  if (walk_entered && !round3_diag_logging_triggered_) {
+    if (round3_diag_file_.is_open()) {
+      round3_diag_file_.flush();
+      round3_diag_file_.close();
+    }
+
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_now{};
+#ifdef _WIN32
+    localtime_s(&tm_now, &time_t_now);
+#else
+    localtime_r(&time_t_now, &tm_now);
+#endif
+    char time_buf[64];
+    std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
+
+    std::string diag_path = round3_diag_log_dir_ + "/t26_round3_diag_" + std::string(time_buf) + ".csv";
+    round3_diag_file_.open(diag_path);
+    if (round3_diag_file_.is_open()) {
+      round3_diag_file_
+          << "timestamp_ns,phase_sin,phase_cos,cmd_linear_x,cmd_linear_y,cmd_angular_z,"
+          << "left_contact,right_contact,base_euler_x,base_euler_y,base_euler_z,"
+          << "base_ang_vel_x,base_ang_vel_y,base_ang_vel_z";
+      for (const auto& name : joint_names_) {
+        round3_diag_file_
+            << ",action_" << name
+            << ",pos_" << name
+            << ",vel_" << name
+            << ",effort_" << name
+            << ",pos_des_raw_" << name
+            << ",pos_des_lpf_" << name
+            << ",tau_des_raw_" << name
+            << ",tau_des_lpf_" << name
+            << ",is_parallel_" << name;
+      }
+      round3_diag_file_ << "\n";
+      round3_diag_logging_triggered_ = true;
+      round3_diag_log_count_ = 0;
+      fprintf(stderr, "[RLController] Round3 diagnostic logging triggered: %s\n", diag_path.c_str());
+    } else {
+      fprintf(stderr, "[RLController] ERROR: Failed to open Round3 diagnostic log: %s\n", diag_path.c_str());
+    }
+  }
+
+  if (!round3_diag_logging_triggered_ || round3_diag_log_count_ >= round3_diag_log_max_count_) {
+    return;
+  }
+
+  auto now_ns = duration_cast<nanoseconds>(high_resolution_clock::now().time_since_epoch()).count();
+  bool left_contact = DetectFootContact(0);
+  bool right_contact = DetectFootContact(1);
+
+  round3_diag_file_
+      << now_ns
+      << "," << last_phase_sin_
+      << "," << last_phase_cos_
+      << "," << last_cmd_linear_x_
+      << "," << last_cmd_linear_y_
+      << "," << last_cmd_angular_z_
+      << "," << left_contact
+      << "," << right_contact
+      << "," << propri_.base_euler_xyz(0)
+      << "," << propri_.base_euler_xyz(1)
+      << "," << propri_.base_euler_xyz(2)
+      << "," << propri_.base_ang_vel(0)
+      << "," << propri_.base_ang_vel(1)
+      << "," << propri_.base_ang_vel(2);
+
+  {
+    std::shared_lock<std::shared_mutex> lock(joint_state_mutex_);
+    for (int ii = 0; ii < onnx_conf_.actions_size; ++ii) {
+      round3_diag_file_
+          << "," << actions_[ii]
+          << "," << propri_.joint_pos(ii)
+          << "," << propri_.joint_vel(ii)
+          << "," << joint_state_data_.effort[ii]
+          << "," << last_pos_des_raw_[ii]
+          << "," << last_pos_des_lpf_[ii]
+          << "," << last_tau_des_raw_[ii]
+          << "," << last_tau_des_lpf_[ii]
+          << "," << last_is_parallel_joint_[ii];
+    }
+  }
+  round3_diag_file_ << "\n";
+
+  round3_diag_log_count_++;
+  if (round3_diag_log_count_ % 500 == 0) {
+    double elapsed_sec = round3_diag_log_count_ * walk_step_conf_.decimation / 1000.0;
+    fprintf(stderr, "[RLController] Round3 diagnostic progress: %d/%d frames (%.1fs)\n",
+            round3_diag_log_count_, round3_diag_log_max_count_, elapsed_sec);
+  }
+  if (round3_diag_log_count_ >= round3_diag_log_max_count_) {
+    round3_diag_file_.flush();
+    round3_diag_file_.close();
+    round3_diag_logging_triggered_ = false;
+    fprintf(stderr, "[RLController] Round3 diagnostic logging finished (%d frames)\n",
+            round3_diag_log_count_);
   }
 }
 
