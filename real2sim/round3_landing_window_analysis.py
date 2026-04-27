@@ -58,6 +58,20 @@ CLEARANCE_MIN_METERS = 0.04
 CONTACT_PRE_MARGIN_METERS = 0.01
 TRACKING_ERR_RAD = 0.03
 HIP_KNEE_TRACKING_ERR_RAD = 0.08
+TOUCHDOWN_SEARCH_WINDOW_SEC = 0.04
+TOUCHDOWN_MAX_REL_HEIGHT_M = 0.03
+TOUCHDOWN_DESCENT_VEL_MPS = 0.02
+TOUCHDOWN_SETTLE_VEL_MPS = 0.05
+TOUCHDOWN_CONTACT_HOLD_FRAMES = 3
+GEOM_TOUCHDOWN_REFRACTORY_SEC = 0.12
+FIRST_CONTACT_CONTACT_HOLD_FRAMES = 2
+STABLE_TOUCHDOWN_SEARCH_SEC = 0.08
+STABLE_TOUCHDOWN_HOLD_FRAMES = 4
+STABLE_TOUCHDOWN_MAX_REL_HEIGHT_M = 0.025
+STABLE_TOUCHDOWN_MAX_VEL_MPS = 0.08
+STABLE_TOUCHDOWN_MAX_DESCENT_MPS = 0.015
+STABLE_TOUCHDOWN_MAX_FLAT_ERR_RATE = 1.2
+STABLE_TOUCHDOWN_MAX_FOOT_X_RATE = 0.20
 
 
 @dataclass
@@ -65,6 +79,9 @@ class TouchdownEvent:
     side: str
     index: int
     timestamp_sec: float
+    source: str
+    first_contact_index: int
+    first_contact_time_sec: float
 
 
 def latest_round3_diag() -> str:
@@ -161,21 +178,228 @@ def attach_fk_metrics(rows):
             row["right_sole_pitch"] ** 2 + row["right_sole_roll"] ** 2
         )
 
+    for side in ("left", "right"):
+        prev_z = rows[0][f"{side}_foot_z"]
+        prev_x = rows[0][f"{side}_foot_x"]
+        prev_t = rows[0]["time_sec"]
+        rows[0][f"{side}_foot_vz"] = 0.0
+        rows[0][f"{side}_foot_vx"] = 0.0
+        rows[0][f"{side}_rel_height"] = rows[0][f"{side}_foot_z"] - rows[0][f"{'right' if side == 'left' else 'left'}_foot_z"]
+        rows[0][f"{side}_flat_error_rate"] = 0.0
+        for idx in range(1, len(rows)):
+            prev_flat_err = rows[idx - 1][f"{side}_foot_flat_error"]
+            curr_flat_err = rows[idx][f"{side}_foot_flat_error"]
+            curr_x = rows[idx][f"{side}_foot_x"]
+            curr_z = rows[idx][f"{side}_foot_z"]
+            curr_t = rows[idx]["time_sec"]
+            dt = max(curr_t - prev_t, 1e-6)
+            rows[idx][f"{side}_foot_vx"] = (curr_x - prev_x) / dt
+            rows[idx][f"{side}_foot_vz"] = (curr_z - prev_z) / dt
+            rows[idx][f"{side}_rel_height"] = rows[idx][f"{side}_foot_z"] - rows[idx][f"{'right' if side == 'left' else 'left'}_foot_z"]
+            rows[idx][f"{side}_flat_error_rate"] = (curr_flat_err - prev_flat_err) / dt
+            prev_x = curr_x
+            prev_z = curr_z
+            prev_t = curr_t
+
+
+def has_pre_swing_clearance(rows, idx, side):
+    start_idx = find_index_at_or_before(rows, rows[idx]["time_sec"] - SWING_WINDOW_SEC)
+    max_rel_height = max(row[f"{side}_rel_height"] for row in rows[start_idx : idx + 1])
+    return max_rel_height >= CLEARANCE_MIN_METERS
+
+
+def holds_contact(rows, idx, side):
+    contact_key = f"{side}_contact"
+    end_idx = min(len(rows), idx + TOUCHDOWN_CONTACT_HOLD_FRAMES)
+    return all(int(rows[ii][contact_key]) == 1 for ii in range(idx, end_idx))
+
+
+def holds_contact_for_frames(rows, idx, side, hold_frames):
+    contact_key = f"{side}_contact"
+    end_idx = min(len(rows), idx + hold_frames)
+    if end_idx <= idx:
+        return False
+    return all(int(rows[ii][contact_key]) == 1 for ii in range(idx, end_idx))
+
+
+def touchdown_geom_ok(rows, idx, side):
+    row = rows[idx]
+    prev_vz = rows[max(idx - 1, 0)][f"{side}_foot_vz"]
+    curr_vz = row[f"{side}_foot_vz"]
+    rel_height = row[f"{side}_rel_height"]
+    return (
+        rel_height <= TOUCHDOWN_MAX_REL_HEIGHT_M
+        and prev_vz <= -TOUCHDOWN_DESCENT_VEL_MPS
+        and abs(curr_vz) <= TOUCHDOWN_SETTLE_VEL_MPS
+        and has_pre_swing_clearance(rows, idx, side)
+    )
+
+
+def first_contact_geom_ok(rows, idx, side):
+    row = rows[idx]
+    prev_vz = rows[max(idx - 1, 0)][f"{side}_foot_vz"]
+    rel_height = row[f"{side}_rel_height"]
+    return (
+        rel_height <= TOUCHDOWN_MAX_REL_HEIGHT_M
+        and prev_vz <= -TOUCHDOWN_DESCENT_VEL_MPS
+        and has_pre_swing_clearance(rows, idx, side)
+    )
+
+
+def stable_touchdown_geom_ok(rows, idx, side):
+    row = rows[idx]
+    rel_height = row[f"{side}_rel_height"]
+    vz = row[f"{side}_foot_vz"]
+    vx = row[f"{side}_foot_vx"]
+    flat_err_rate = row[f"{side}_flat_error_rate"]
+    return (
+        rel_height <= STABLE_TOUCHDOWN_MAX_REL_HEIGHT_M
+        and abs(vz) <= STABLE_TOUCHDOWN_MAX_VEL_MPS
+        and vz >= -STABLE_TOUCHDOWN_MAX_DESCENT_MPS
+        and abs(vx) <= STABLE_TOUCHDOWN_MAX_FOOT_X_RATE
+        and abs(flat_err_rate) <= STABLE_TOUCHDOWN_MAX_FLAT_ERR_RATE
+    )
+
+
+def refine_touchdown_index(rows, candidate_idx, side):
+    candidate_time = rows[candidate_idx]["time_sec"]
+    win_start_idx = find_index_at_or_before(rows, candidate_time - TOUCHDOWN_SEARCH_WINDOW_SEC)
+    win_end_time = candidate_time + TOUCHDOWN_SEARCH_WINDOW_SEC
+    win_end_idx = candidate_idx
+    while win_end_idx + 1 < len(rows) and rows[win_end_idx + 1]["time_sec"] <= win_end_time:
+        win_end_idx += 1
+
+    best_idx = candidate_idx
+    best_score = None
+    for idx in range(win_start_idx, win_end_idx + 1):
+        row = rows[idx]
+        contact = int(row[f"{side}_contact"])
+        contact_hold = holds_contact(rows, idx, side)
+        geom_ok = touchdown_geom_ok(rows, idx, side)
+        rel_height = row[f"{side}_rel_height"]
+        curr_vz = abs(row[f"{side}_foot_vz"])
+        score = (
+            0 if geom_ok else 1,
+            0 if contact and contact_hold else 1,
+            abs(rel_height),
+            curr_vz,
+            abs(idx - candidate_idx),
+        )
+        if best_score is None or score < best_score:
+            best_score = score
+            best_idx = idx
+    return best_idx
+
+
+def find_first_contact_index(rows, candidate_idx, side):
+    candidate_time = rows[candidate_idx]["time_sec"]
+    win_start_idx = find_index_at_or_before(rows, candidate_time - TOUCHDOWN_SEARCH_WINDOW_SEC)
+    best_idx = candidate_idx
+    for idx in range(win_start_idx, candidate_idx + 1):
+        row = rows[idx]
+        contact = int(row[f"{side}_contact"])
+        if (
+            first_contact_geom_ok(rows, idx, side)
+            and (contact == 1 or holds_contact_for_frames(rows, idx, side, FIRST_CONTACT_CONTACT_HOLD_FRAMES))
+        ):
+            return idx
+        if first_contact_geom_ok(rows, idx, side):
+            best_idx = idx
+    return best_idx
+
+
+def find_stable_touchdown_index(rows, first_contact_idx, candidate_idx, side):
+    start_time = rows[first_contact_idx]["time_sec"]
+    end_time = rows[candidate_idx]["time_sec"] + STABLE_TOUCHDOWN_SEARCH_SEC
+    start_idx = first_contact_idx
+    end_idx = candidate_idx
+    while end_idx + 1 < len(rows) and rows[end_idx + 1]["time_sec"] <= end_time:
+        end_idx += 1
+
+    best_idx = candidate_idx
+    best_score = None
+    for idx in range(start_idx, end_idx + 1):
+        row = rows[idx]
+        geom_ok = stable_touchdown_geom_ok(rows, idx, side)
+        contact_hold = holds_contact_for_frames(rows, idx, side, STABLE_TOUCHDOWN_HOLD_FRAMES)
+        rel_height = abs(row[f"{side}_rel_height"])
+        vz = abs(row[f"{side}_foot_vz"])
+        flat_rate = abs(row[f"{side}_flat_error_rate"])
+        score = (
+            0 if geom_ok else 1,
+            0 if contact_hold else 1,
+            rel_height,
+            vz,
+            flat_rate,
+            idx,
+        )
+        if best_score is None or score < best_score:
+            best_score = score
+            best_idx = idx
+        if geom_ok and contact_hold:
+            return idx
+    return best_idx
+
+
+def detect_touchdowns_from_contact(rows, side):
+    contact_key = f"{side}_contact"
+    prev_contact = 0
+    events = []
+    for idx, row in enumerate(rows):
+        contact = int(row[contact_key])
+        if contact == 1 and prev_contact == 0:
+            refined_idx = refine_touchdown_index(rows, idx, side)
+            first_contact_idx = find_first_contact_index(rows, refined_idx, side)
+            stable_idx = find_stable_touchdown_index(rows, first_contact_idx, refined_idx, side)
+            if holds_contact(rows, stable_idx, side) and has_pre_swing_clearance(rows, stable_idx, side):
+                events.append(
+                    TouchdownEvent(
+                        side,
+                        stable_idx,
+                        rows[stable_idx]["time_sec"],
+                        "contact_refined",
+                        first_contact_idx,
+                        rows[first_contact_idx]["time_sec"],
+                    )
+                )
+        prev_contact = contact
+    return events
+
+
+def detect_touchdowns_from_geometry(rows, side):
+    events = []
+    last_event_time = -1e9
+    for idx in range(1, len(rows)):
+        if rows[idx]["time_sec"] - last_event_time < GEOM_TOUCHDOWN_REFRACTORY_SEC:
+            continue
+        if not first_contact_geom_ok(rows, idx, side):
+            continue
+        prev_vz = rows[idx - 1][f"{side}_foot_vz"]
+        curr_vz = rows[idx][f"{side}_foot_vz"]
+        if prev_vz <= -TOUCHDOWN_DESCENT_VEL_MPS and curr_vz >= -TOUCHDOWN_SETTLE_VEL_MPS:
+            stable_idx = find_stable_touchdown_index(rows, idx, idx, side)
+            events.append(
+                TouchdownEvent(
+                    side,
+                    stable_idx,
+                    rows[stable_idx]["time_sec"],
+                    "geometry_fallback",
+                    idx,
+                    rows[idx]["time_sec"],
+                )
+            )
+            last_event_time = rows[stable_idx]["time_sec"]
+    return events
+
 
 def detect_touchdowns(rows):
     events = []
-    prev_left = 0
-    prev_right = 0
-    for idx, row in enumerate(rows):
-        left = int(row["left_contact"])
-        right = int(row["right_contact"])
-        if left == 1 and prev_left == 0:
-            events.append(TouchdownEvent("left", idx, row["time_sec"]))
-        if right == 1 and prev_right == 0:
-            events.append(TouchdownEvent("right", idx, row["time_sec"]))
-        prev_left = left
-        prev_right = right
-    return events
+    for side in ("left", "right"):
+        side_events = detect_touchdowns_from_contact(rows, side)
+        if not side_events:
+            side_events = detect_touchdowns_from_geometry(rows, side)
+        events.extend(side_events)
+    return sorted(events, key=lambda event: event.timestamp_sec)
 
 
 def find_index_at_or_before(rows, target_time):
@@ -245,8 +469,11 @@ def summarize_event(rows, event: TouchdownEvent):
 
     return {
         "side": swing_side,
+        "first_contact_time_sec": event.first_contact_time_sec,
+        "first_contact_index": event.first_contact_index,
         "touchdown_time_sec": t_touch,
         "touchdown_index": touch_idx,
+        "touchdown_source": event.source,
         "primary_flag": primary_flag,
         "max_swing_clearance_m": max_clearance,
         "clearance_at_minus_50ms_m": clearance_pre50,
