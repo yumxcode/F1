@@ -41,66 +41,19 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
               AIMRT_INFO("Trigger event: [{}] -> {}", trigger_topic, now_state);
               // fprintf(stderr, "[ControlModule] State changed: '%s' -> '%s' (trigger: %s)\n",
               //         last_state_name_.c_str(), now_state.c_str(), trigger_topic.c_str());
-              
-              // 检测进入 zero 模式（从非 zero 状态切换到 zero 状态）
-              if (now_state == "zero" && last_state_name_ != "zero") {
-                zero_mode_entered_.store(true, std::memory_order_release);
-                // fprintf(stderr, "[ControlModule] ZERO mode entered! Setting zero_mode_entered=true\n");
-                // 通知所有 RLController 进入 zero 模式
-                int rl_count = 0;
-                for (auto& [name, controller] : controller_map_) {
-                  auto rl_controller = std::dynamic_pointer_cast<RLController>(controller);
-                  if (rl_controller) {
-                    rl_controller->SetZeroModeEntered(true);
-                    rl_controller->SetT4RecordRequested(true, "zero");
-                    rl_count++;
-                    // fprintf(stderr, "[ControlModule] Notified RLController '%s' of ZERO mode (T1+T4)\n", name.c_str());
-                  }
-                }
-                // fprintf(stderr, "[ControlModule] Notified %d RLController(s) total\n", rl_count);
-                // AIMRT_INFO("[T1+T4 Trigger] Entered ZERO mode, T1+T4 logging will start");
-              }
 
-              // 检测进入 stand 模式（从非 stand 状态切换到 stand 状态）
-              if (now_state == "stand" && last_state_name_ != "stand") {
-                // fprintf(stderr, "[ControlModule] STAND mode entered! Triggering T4 logging\n");
-                int rl_count = 0;
-                for (auto& [name, controller] : controller_map_) {
-                  auto rl_controller = std::dynamic_pointer_cast<RLController>(controller);
-                  if (rl_controller) {
-                    rl_controller->SetT4RecordRequested(true, "stand");
-                    rl_count++;
-                    // fprintf(stderr, "[ControlModule] Notified RLController '%s' of STAND mode (T4)\n", name.c_str());
-                  }
-                }
-                // fprintf(stderr, "[ControlModule] Notified %d RLController(s) for T4 logging\n", rl_count);
-                // AIMRT_INFO("[T4 Trigger] Entered STAND mode, T4 logging will start");
-              }
-
-              // 检测进入 walk_leg 模式（仅 stand -> walk_leg 才触发 T_M logging）
               if (now_state == "walk_leg" && last_state_name_ == "stand") {
-                fprintf(stderr, "[ControlModule] stand -> walk_leg detected! Triggering T_M logging (20s)\n");
-                int rl_count = 0;
-                for (auto& name : controller_names) {  // 只通知当前活跃控制器
+                for (auto& name : controller_names) {
                   auto it = controller_map_.find(name);
                   if (it == controller_map_.end()) continue;
                   auto rl_controller = std::dynamic_pointer_cast<RLController>(it->second);
                   if (rl_controller) {
                     rl_controller->SetWalkLegEntered(true);
-                    rl_count++;
-                    fprintf(stderr, "[ControlModule] Notified RLController '%s': T_M logging will start\n", name.c_str());
                   }
                 }
-                fprintf(stderr, "[ControlModule] Notified %d RLController(s) for T_M logging\n", rl_count);
-                AIMRT_INFO("[T_M Trigger] stand -> walk_leg, T_M obs+raw logging will start (20s)");
-              } else if (now_state == "walk_leg" && last_state_name_ != "walk_leg") {
-                // 从其他非 stand 状态进入 walk_leg，不触发 T_M logging
-                // fprintf(stderr, "[ControlModule] '%s' -> walk_leg (non-stand source), T_M logging NOT triggered\n", last_state_name_.c_str());
               }
 
-              // 检测离开 walk_leg 模式（从 walk_leg 切换到其他状态），重置标志允许再次触发
               if (last_state_name_ == "walk_leg" && now_state != "walk_leg") {
-                // fprintf(stderr, "[ControlModule] Left walk_leg mode -> '%s', resetting walk_leg_entered flag\n", now_state.c_str());
                 for (auto& [name, controller] : controller_map_) {
                   auto rl_controller = std::dynamic_pointer_cast<RLController>(controller);
                   if (rl_controller) {
@@ -108,6 +61,7 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
                   }
                 }
               }
+
               last_state_name_ = now_state;
             }
           });
@@ -258,21 +212,6 @@ bool ControlModule::MainLoop() {
       }
       aimrt::channel::Publish<my_ros2_proto::msg::JointCommand>(joint_cmd_pub_, cmd_msg);
 
-      // ---- T1 静态测试：始终调用所有 RLController 的 T1 日志更新（不依赖活跃状态） ----
-      for (auto& [name, controller] : controller_map_) {
-        auto rl_controller = std::dynamic_pointer_cast<RLController>(controller);
-        if (rl_controller) {
-          rl_controller->UpdateT1Logging();
-        }
-      }
-
-      // ---- T4 原始传感器数据记录：始终调用所有 RLController 的 T4 日志更新（zero 模式触发，不依赖活跃状态） ----
-      for (auto& [name, controller] : controller_map_) {
-        auto rl_controller = std::dynamic_pointer_cast<RLController>(controller);
-        if (rl_controller) {
-          rl_controller->UpdateT4Logging();
-        }
-      }
     }
     AIMRT_INFO("Exit MainLoop.");
   } catch (const std::exception& e) {
@@ -283,6 +222,4 @@ bool ControlModule::MainLoop() {
 }
 
 }  // namespace xyber_x1_infer::rl_control_module
-
-
 

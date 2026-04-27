@@ -3,8 +3,6 @@
 #include <chrono>
 #include <memory>
 #include <set>
-#include <fstream>
-#include <filesystem>
 #include "aimrt_module_cpp_interface/module_base.h"
 #include "control_module/pd_controller.h"
 #include "control_module/rl_controller.h"
@@ -48,9 +46,7 @@ class ControlModule : public aimrt::ModuleBase {
   std::atomic_bool run_flag_{true};
   time_point<high_resolution_clock> last_trigger_time_;
 
-  // 状态监听：检测进入 zero 模式
   std::string last_state_name_;
-  std::atomic_bool zero_mode_entered_{false};  // zero 模式进入标志
 };
 
 }  // namespace xyber_x1_infer::rl_control_module
