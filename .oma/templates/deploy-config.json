@@ -1,0 +1,53 @@
+{
+  "_comment": "deploy-config.json — fill in before running any deploy-tests script. All fields read by measure.py / analyze.py via json.load().",
+
+  "robot_name": "my_robot",
+  "design_id":  "design-YYYYMMDD-001",
+
+  "control_hz": 50,
+  "target_speed_mps": 0.8,
+
+  "joint_names": [
+    "LHipYaw", "LHipRoll", "LHipPitch", "LKnee", "LAnklePitch", "LAnkleRoll",
+    "RHipYaw", "RHipRoll", "RHipPitch", "RKnee", "RAnklePitch", "RAnkleRoll"
+  ],
+
+  "kp_sim": {
+    "LHipYaw": 80,  "LHipRoll": 80,  "LHipPitch": 100,
+    "LKnee":  100,  "LAnklePitch": 40, "LAnkleRoll": 40,
+    "RHipYaw": 80,  "RHipRoll": 80,  "RHipPitch": 100,
+    "RKnee":  100,  "RAnklePitch": 40, "RAnkleRoll": 40
+  },
+  "kd_sim": {
+    "LHipYaw": 5, "LHipRoll": 5, "LHipPitch": 5,
+    "LKnee":   5, "LAnklePitch": 2, "LAnkleRoll": 2,
+    "RHipYaw": 5, "RHipRoll": 5, "RHipPitch": 5,
+    "RKnee":   5, "RAnklePitch": 2, "RAnkleRoll": 2
+  },
+
+  "foot_names": ["LF", "RF", "LH", "RH"],
+
+  "sim_step_freq_hz": 2.5,
+  "sim_duty_cycle": {
+    "LF": 0.55, "RF": 0.55,
+    "LH": 0.55, "RH": 0.55
+  },
+
+  "sim_latency_ms": 4.0,
+
+  "sim_noise_std": {
+    "gyro_x": 0.01,  "gyro_y": 0.01,  "gyro_z": 0.01,
+    "accel_x": 0.05, "accel_y": 0.05, "accel_z": 0.05,
+    "joint_position": 0.005
+  },
+
+  "obs_names": null,
+
+  "speed_steps_mps": [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.5],
+  "design_max_speed_mps": 1.5,
+
+  "deployed_at": null,
+  "checkpoint_ref": null,
+  "firmware_version": null,
+  "notes": ""
+}
