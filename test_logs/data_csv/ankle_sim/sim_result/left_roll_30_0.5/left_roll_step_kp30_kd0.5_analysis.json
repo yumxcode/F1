@@ -1,0 +1,258 @@
+{
+  "csv_file": "left_roll_step_kp30_kd0.5.csv",
+  "mode": "step",
+  "basic_info": {
+    "samples": 18000,
+    "primary_joint": "left_ankle_roll_joint",
+    "coupled_joint": "left_ankle_pitch_joint",
+    "iterations": [
+      1,
+      2,
+      3
+    ],
+    "phases": {
+      "pre_hold": 9000,
+      "active": 3000,
+      "post_hold": 6000
+    }
+  },
+  "signal_path": {
+    "status": "ok",
+    "target_span": 0.015,
+    "actual_span": 0.016234
+  },
+  "timing_context": {
+    "deploy_info_path": "test_logs/data_csv/ankle_sim/analyze/deploy_info.json",
+    "control_hz": 1000,
+    "control_period_sec": 0.001,
+    "cycle_time_sec": 0.7,
+    "stance_ratio": 0.6,
+    "stance_time_sec": 0.42,
+    "rise_budget_ratio": 0.2,
+    "peak_budget_ratio": 0.35,
+    "rise_time_upper_sec": 0.084,
+    "peak_time_upper_sec": 0.147,
+    "rise_time_lower_sec": 0.005,
+    "peak_time_lower_sec": 0.015
+  },
+  "iterations": [
+    {
+      "pre_target": -0.0038150000000000002,
+      "active_target": 0.011185,
+      "post_target": -0.003815,
+      "pre_actual": -0.003852627,
+      "active_actual": 0.010367801,
+      "post_actual": -0.0034677965,
+      "command_step": 0.015000000000000001,
+      "actual_step": 0.014220428,
+      "tracking_ratio": 0.9480285333333333,
+      "peak_tracking_ratio": 0.9988417999999998,
+      "tail_actual_step": 0.01494822105940594,
+      "tail_tracking_ratio": 0.9965480706270625,
+      "post_actual_step": 0.0003848304999999998,
+      "final_tracking_ratio": 0.02565536666666665,
+      "coupled_motion": -2.852000000000006e-06,
+      "peak_overshoot": 0.0,
+      "overshoot_ratio": 0.0,
+      "steady_error": 0.00034720349999999966,
+      "rise_time_sec": 0.10928468692586968,
+      "rise_time_status": "too_slow_for_walking",
+      "peak_time_sec": 0.46199999999999974,
+      "peak_time_status": "unusable_for_walking",
+      "first_target_cross_time_sec": null,
+      "settling_time_sec": 0.21399999999999997,
+      "zero_crossing_count": 0,
+      "oscillation_frequency_hz": null,
+      "decay_ratio": null,
+      "estimated_damping_ratio": null,
+      "response_class": "well_damped_tracking",
+      "primary_peak_velocity": 0.355895,
+      "coupled_peak_velocity": 0.004844,
+      "primary_peak_effort": 0.484893,
+      "coupled_peak_effort": 0.003741
+    },
+    {
+      "pre_target": -0.0038150000000000002,
+      "active_target": 0.011185,
+      "post_target": -0.003815,
+      "pre_actual": -0.003831692,
+      "active_actual": 0.010367786,
+      "post_actual": -0.0034678474999999998,
+      "command_step": 0.015000000000000001,
+      "actual_step": 0.014199478,
+      "tracking_ratio": 0.9466318666666665,
+      "peak_tracking_ratio": 0.9973794666666665,
+      "tail_actual_step": 0.014927441999999999,
+      "tail_tracking_ratio": 0.9951627999999999,
+      "post_actual_step": 0.00036384450000000006,
+      "final_tracking_ratio": 0.0242563,
+      "coupled_motion": 9.999999999994822e-09,
+      "peak_overshoot": 0.0,
+      "overshoot_ratio": 0.0,
+      "steady_error": 0.00034715250000000005,
+      "rise_time_sec": 0.10939320400161848,
+      "rise_time_status": "too_slow_for_walking",
+      "peak_time_sec": 0.44400199999999934,
+      "peak_time_status": "unusable_for_walking",
+      "first_target_cross_time_sec": null,
+      "settling_time_sec": 0.21399599999999985,
+      "zero_crossing_count": 0,
+      "oscillation_frequency_hz": null,
+      "decay_ratio": null,
+      "estimated_damping_ratio": null,
+      "response_class": "well_damped_tracking",
+      "primary_peak_velocity": 0.355722,
+      "coupled_peak_velocity": 0.004837,
+      "primary_peak_effort": 0.484885,
+      "coupled_peak_effort": 0.003738
+    },
+    {
+      "pre_target": -0.0038150000000000002,
+      "active_target": 0.011185,
+      "post_target": -0.003815,
+      "pre_actual": -0.0038317683333333333,
+      "active_actual": 0.010367785,
+      "post_actual": -0.0034678695,
+      "command_step": 0.015000000000000001,
+      "actual_step": 0.014199553333333333,
+      "tracking_ratio": 0.9466368888888889,
+      "peak_tracking_ratio": 0.9973845555555554,
+      "tail_actual_step": 0.01492719407590759,
+      "tail_tracking_ratio": 0.9951462717271726,
+      "post_actual_step": 0.0003638988333333334,
+      "final_tracking_ratio": 0.024259922222222226,
+      "coupled_motion": 1.2999999999994624e-08,
+      "peak_overshoot": 0.0,
+      "overshoot_ratio": 0.0,
+      "steady_error": 0.0003471304999999999,
+      "rise_time_sec": 0.10939563065399098,
+      "rise_time_status": "too_slow_for_walking",
+      "peak_time_sec": 0.4440179999999998,
+      "peak_time_status": "unusable_for_walking",
+      "first_target_cross_time_sec": null,
+      "settling_time_sec": 0.21399899999999938,
+      "zero_crossing_count": 0,
+      "oscillation_frequency_hz": null,
+      "decay_ratio": null,
+      "estimated_damping_ratio": null,
+      "response_class": "well_damped_tracking",
+      "primary_peak_velocity": 0.355714,
+      "coupled_peak_velocity": 0.004831,
+      "primary_peak_effort": 0.484808,
+      "coupled_peak_effort": 0.003735
+    }
+  ],
+  "aggregate": {
+    "command_step": {
+      "mean": 0.015000000000000001,
+      "std": 0.0
+    },
+    "actual_step": {
+      "mean": 0.014206486444444444,
+      "std": 1.2073800033927359e-05
+    },
+    "tracking_ratio": {
+      "mean": 0.9470990962962963,
+      "std": 0.0008049200022618093
+    },
+    "peak_tracking_ratio": {
+      "mean": 0.9978686074074071,
+      "std": 0.0008428133487939523
+    },
+    "tail_actual_step": {
+      "mean": 0.014934285711771175,
+      "std": 1.206900169298085e-05
+    },
+    "tail_tracking_ratio": {
+      "mean": 0.9956190474514117,
+      "std": 0.0008046001128653527
+    },
+    "post_actual_step": {
+      "mean": 0.0003708579444444444,
+      "std": 1.2100618562395431e-05
+    },
+    "final_tracking_ratio": {
+      "mean": 0.02472386296296296,
+      "std": 0.0008067079041596952
+    },
+    "coupled_motion": {
+      "mean": -9.430000000000055e-07,
+      "std": 1.6532431763052891e-06
+    },
+    "peak_overshoot": {
+      "mean": 0.0,
+      "std": 0.0
+    },
+    "overshoot_ratio": {
+      "mean": 0.0,
+      "std": 0.0
+    },
+    "steady_error": {
+      "mean": 0.00034716216666666656,
+      "std": 3.744774136475165e-08
+    },
+    "rise_time_sec": {
+      "mean": 0.1093578405271597,
+      "std": 6.33644947641037e-05
+    },
+    "peak_time_sec": {
+      "mean": 0.4500066666666663,
+      "std": 0.010386534423634065
+    },
+    "first_target_cross_time_sec": {
+      "mean": null,
+      "std": null
+    },
+    "settling_time_sec": {
+      "mean": 0.21399833333333307,
+      "std": 2.0816659994371036e-06
+    },
+    "zero_crossing_count": {
+      "mean": 0.0,
+      "std": 0.0
+    },
+    "oscillation_frequency_hz": {
+      "mean": null,
+      "std": null
+    },
+    "decay_ratio": {
+      "mean": null,
+      "std": null
+    },
+    "estimated_damping_ratio": {
+      "mean": null,
+      "std": null
+    },
+    "primary_peak_velocity": {
+      "mean": 0.355777,
+      "std": 0.00010226925246624492
+    },
+    "coupled_peak_velocity": {
+      "mean": 0.004837333333333333,
+      "std": 6.5064070986477085e-06
+    },
+    "primary_peak_effort": {
+      "mean": 0.48486199999999996,
+      "std": 4.693612681080438e-05
+    },
+    "coupled_peak_effort": {
+      "mean": 0.003738,
+      "std": 2.9999999999999645e-06
+    }
+  },
+  "response_classes": [
+    "well_damped_tracking",
+    "well_damped_tracking",
+    "well_damped_tracking"
+  ],
+  "rise_time_statuses": [
+    "too_slow_for_walking",
+    "too_slow_for_walking",
+    "too_slow_for_walking"
+  ],
+  "peak_time_statuses": [
+    "unusable_for_walking",
+    "unusable_for_walking",
+    "unusable_for_walking"
+  ]
+}

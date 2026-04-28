@@ -175,6 +175,7 @@ class RLController : public ControllerBase {
   std::ofstream tm_raw_imu_quat_file_;
   std::ofstream tm_raw_imu_gyro_file_;
   std::ofstream tm_raw_imu_accel_file_;
+  bool tm_raw_logging_enabled_{false};
   bool tm_raw_logging_triggered_{false};
   int  tm_raw_log_count_{0};
   int  tm_raw_log_max_count_{0};
@@ -183,6 +184,7 @@ class RLController : public ControllerBase {
 
   // T_M25: ONNX action 输出记录 (CSV, walk_leg 触发, 20s @ 策略频率, 保存至 t_m/)
   std::ofstream tm25_action_file_;
+  bool tm25_logging_enabled_{false};
   bool tm25_logging_triggered_{false};
   int  tm25_log_count_{0};
   int  tm25_log_max_count_{0};

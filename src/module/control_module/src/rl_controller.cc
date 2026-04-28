@@ -105,7 +105,7 @@ void RLController::Init(const YAML::Node& cfg_node) {
     // 40s * (1000Hz / decimation) 帧
     t2_log_max_count_ = 40 * (1000 / walk_step_conf_.decimation);
     t2_log_count_ = 0;
-    t2_logging_enabled_ = true;   // [T2 测试] 已启用
+    t2_logging_enabled_ = false;  // [开关] true=启用, false=禁用
     t2_logging_triggered_ = false;
 
     // 初始化步态检测辅助变量
@@ -156,7 +156,7 @@ void RLController::Init(const YAML::Node& cfg_node) {
     // 20s × 策略频率（1000Hz / decimation）
     tm_log_max_count_ = 20 * (1000 / walk_step_conf_.decimation);
     tm_log_count_ = 0;
-    tm_logging_enabled_ = true;
+    tm_logging_enabled_ = false;  // [开关] true=启用, false=禁用
     tm_logging_triggered_ = false;
     tm_obs_bin_file_ = nullptr;
 
@@ -173,7 +173,9 @@ void RLController::Init(const YAML::Node& cfg_node) {
     tm_raw_log_max_count_ = 20 * 1000;  // 20s @ 1000Hz = 20000 帧
     tm_raw_log_count_ = 0;
     tm_raw_logging_triggered_ = false;
-    fprintf(stderr, "[RLController] T_M raw sensor sync logging enabled (6 CSV, 20s @ 1000Hz, dir: %s)\n", tm_log_dir_.c_str());
+    tm_raw_logging_enabled_ = false;  // [开关] true=启用, false=禁用
+    fprintf(stderr, "[RLController] T_M raw sensor sync logging %s (6 CSV, 20s @ 1000Hz, dir: %s)\n",
+            tm_raw_logging_enabled_ ? "ENABLED" : "DISABLED", tm_log_dir_.c_str());
   }
   // ---- T_M 原始传感器日志初始化结束 ----
 
@@ -182,7 +184,9 @@ void RLController::Init(const YAML::Node& cfg_node) {
     tm25_log_max_count_ = 20 * (1000 / walk_step_conf_.decimation);
     tm25_log_count_ = 0;
     tm25_logging_triggered_ = false;
-    fprintf(stderr, "[RLController] T_M25 action logging enabled (CSV, max %d frames @ %dHz, dir: %s)\n",
+    tm25_logging_enabled_ = false;  // [开关] true=启用, false=禁用
+    fprintf(stderr, "[RLController] T_M25 action logging %s (CSV, max %d frames @ %dHz, dir: %s)\n",
+            tm25_logging_enabled_ ? "ENABLED" : "DISABLED",
             tm25_log_max_count_, 1000 / walk_step_conf_.decimation, tm_log_dir_.c_str());
   }
   // ---- T_M25 日志初始化结束 ----
@@ -228,7 +232,9 @@ void RLController::Update() {
     }
 
     // T_M25: ONNX action 输出记录（与 T_M obs 同窗口，20s @ 策略频率）
-    LogTm25Data();
+    if (tm25_logging_enabled_) {
+      LogTm25Data();
+    }
   }
 
   loop_count_++;
@@ -1045,7 +1051,9 @@ void RLController::UpdateT4Logging() {
   if (t4_logging_enabled_) {
     LogT4RawSensorData();
   }
-  LogTmRawSensorData();
+  if (tm_raw_logging_enabled_) {
+    LogTmRawSensorData();
+  }
 }
 
 void RLController::LogTmData() {

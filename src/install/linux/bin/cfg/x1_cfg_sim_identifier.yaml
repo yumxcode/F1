@@ -54,7 +54,7 @@ aimrt:
     modules:
       - name: SimModule
         log_lvl: INFO
-        cfg_file_path: ./cfg/sim_module/sim_x1_fixed.yaml
+        cfg_file_path: ./cfg/sim_module/sim_x1.yaml
       - name: AnkleIdentifierModule
         log_lvl: INFO
         cfg_file_path: ./cfg/ankle_identifier_module/ankle_identifier.yaml

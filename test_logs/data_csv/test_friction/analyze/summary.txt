@@ -1,0 +1,25 @@
+============================================================
+GRF Analysis Summary
+============================================================
+CSV: grf_20260427_163437.csv
+Frames: 20000, dt=1.0 ms, duration=20.0 s
+
+--- Left foot ---
+  IC events: 29, TO events: 29  (robust: min_swing=50ms, min_stance=50ms)
+  Stance phase: 54.8% of total
+  Fn — max: 1432.5 N, mean (stance): 312.7 N
+  Ft — max: 250.4 N, mean (stance): 39.7 N
+  Stride duration: 0.695 ± 0.026 s (n=28)
+  Peak Fn/stride: 721.6 ± 119.6 N
+  Peak Ft/stride: 111.4 ± 12.7 N
+  Friction utilization (peak Ft/Fn): 0.159 ± 0.033 (μ=1.0)
+
+--- Right foot ---
+  IC events: 30, TO events: 30  (robust: min_swing=50ms, min_stance=50ms)
+  Stance phase: 56.4% of total
+  Fn — max: 1563.1 N, mean (stance): 323.9 N
+  Ft — max: 345.7 N, mean (stance): 44.0 N
+  Stride duration: 0.699 ± 0.008 s (n=28)
+  Peak Fn/stride: 1054.6 ± 379.6 N
+  Peak Ft/stride: 196.3 ± 30.4 N
+  Friction utilization (peak Ft/Fn): 0.214 ± 0.092 (μ=1.0)
