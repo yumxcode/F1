@@ -98,6 +98,7 @@ class RLController : public ControllerBase {
   int round3_diag_log_count_{0};
   int round3_diag_log_max_count_{0};
   std::string round3_diag_log_dir_;
+  std::string round3_diag_log_prefix_;
 
   std::vector<double> last_pos_des_raw_;
   std::vector<double> last_pos_des_lpf_;

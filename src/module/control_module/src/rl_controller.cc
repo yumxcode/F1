@@ -99,6 +99,7 @@ void RLController::Init(const YAML::Node& cfg_node) {
   last_is_parallel_joint_.assign(onnx_conf_.actions_size, 0);
 
   round3_diag_log_dir_ = "test_logs/data_csv";
+  round3_diag_log_prefix_ = "t27_tracking_lag_b1_diag";
   std::filesystem::create_directories(round3_diag_log_dir_);
   round3_diag_log_max_count_ = 40 * (1000 / walk_step_conf_.decimation);
   round3_diag_log_count_ = 0;
@@ -356,7 +357,8 @@ void RLController::LogRound3DiagnosticData() {
     char time_buf[64];
     std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
 
-    std::string diag_path = round3_diag_log_dir_ + "/t26_round3_diag_" + std::string(time_buf) + ".csv";
+    std::string diag_path =
+        round3_diag_log_dir_ + "/" + round3_diag_log_prefix_ + "_" + std::string(time_buf) + ".csv";
     round3_diag_file_.open(diag_path);
     if (round3_diag_file_.is_open()) {
       round3_diag_file_

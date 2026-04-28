@@ -14,7 +14,20 @@ except ImportError as exc:  # pragma: no cover
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_DIR = os.path.dirname(SCRIPT_DIR)
+
+
+def find_repo_root(start_dir: str) -> str:
+    cursor = start_dir
+    while True:
+        if os.path.isdir(os.path.join(cursor, "real2sim")) and os.path.isdir(os.path.join(cursor, "src")):
+            return cursor
+        parent = os.path.dirname(cursor)
+        if parent == cursor:
+            raise RuntimeError("Failed to locate repository root from plan script path")
+        cursor = parent
+
+
+BASE_DIR = find_repo_root(SCRIPT_DIR)
 LOG_DIR = os.path.join(BASE_DIR, "test_logs", "data_csv")
 OUT_DIR = os.path.join(SCRIPT_DIR, "table", "round3")
 XML_PATH = os.path.join(
