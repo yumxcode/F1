@@ -277,27 +277,34 @@
    - `filter_delay` 当前没有证据支撑
    - `delay sweep` 显示 `8/8` 样本在 `10 / 20 / 30 ms` 上标签稳定
 
-3. 当前最合理的修复优先级：
-   - 先针对 `ankle roll` 主轴看 touchdown 前 `raw` 是否本身就没收平
-   - 再针对右腿两次 `tracking_lag` 样本看执行链
-   - 同时把 `left @ 1777280412.454` 和 `right @ 1777280414.944` 两个 `coupled_geometry` 样本单独拎出查几何/耦合
-   - 其中 `tracking_lag` 线已有 step 试验支撑，允许直接进入参数/执行链修复试验
+3. 经 [04_tracking_lag_repair.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/04_tracking_lag_repair.md:1) 的后续试验验证，当前统一口径应进一步收紧为：
+   - `tracking_lag` 线有证据，但单靠 `right_ankle_roll_joint` 单轴 `kp/kd` 扫参不能形成稳定修复路径
+   - 单轴调参会在 `tracking_lag / filter_delay / coupled_geometry / command_not_flat` 之间转移表现
+   - 因此当前最合理的修复优先级已调整为：
+     1. `command_not_flat`
+     2. `coupled_geometry`
+     3. `filter_delay`
+     4. `tracking_lag` 只作为并发问题复核，而不再单独作为第一修复入口
 
 ## 下一步动作
 
-按优先级执行：
+按当前综合口径执行：
 
 1. `command_not_flat` 主线
-   - 继续回放并核查 `ankle roll raw` 在 touchdown 前窗口的意图方向
-   - 判断是否需要回到策略侧做 touchdown 姿态约束设计反馈
+   - 继续回放并核查 touchdown 前窗口的 `raw` 意图方向
+   - 重点判断“更稳但不往前走”是否本质来自上游意图不足
 
-2. `tracking_lag` 主线
-   - 聚焦右腿 `ankle roll`
-   - 检查并联踝执行链、力矩方向、限幅与零位响应
-   - 基于 step 试验，优先验证当前 walk `kp=35, kd=0.5` 是否对 touchdown 小幅调平不足
+2. `coupled_geometry` 主线
+   - 查 pitch/roll 耦合、零位偏置、并联映射与左右脚几何差异
+   - 重点解释“参数调软后更稳，但脚底仍以错误几何姿态触地”的原因
 
-3. `coupled_geometry` 旁线
-   - 查左脚 pitch/roll 耦合、零位偏置、几何映射
+3. `filter_delay` 复核线
+   - 对 `40 / 0.8` 前几步里出现的 `filter_delay` 做针对性复核
+   - 判断它是偶发样本还是新的稳定风险
+
+4. `tracking_lag` 复核线
+   - 保留为并发问题标签
+   - 不再继续单独做 `right roll` 单轴扫参
 
 ## 阻塞状态
 

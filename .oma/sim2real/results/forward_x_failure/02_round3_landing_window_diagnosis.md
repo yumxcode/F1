@@ -115,6 +115,10 @@
 - 与旧版结论相比，需同步修正两点：
   - 事件数改为 `8`，左右脚样本改为 `4/4`
   - 不能再用“只看单一 `primary_flag`”去概括所有并发问题
+- 经 [04_tracking_lag_repair.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/04_tracking_lag_repair.md:1) 的后续参数试验验证，当前更一致的综合口径是：
+  - `severe_foot_flat_touchdown` 仍然是最上游主问题
+  - `tracking_lag` 仍会出现，但不是当前最稳定、最值得单独作为第一入口的主因
+  - 当前更应优先转向 `command_not_flat / coupled_geometry / filter_delay`
 - 当前不允许直接进入低速步态复测或 Round 4 候选验证。
 - 当前不建议把主要精力放在继续争论 `foot_clearance_deficit` 与 `hip_knee_tracking_lag` 谁更主导，因为 touchdown 姿态问题更上游。
 

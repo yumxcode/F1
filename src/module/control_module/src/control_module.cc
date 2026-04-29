@@ -148,6 +148,28 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
         });
       AIMRT_CHECK_ERROR_THROW(ret, "Subscribe failed.");
 
+      if (cfg_node["sub_actuator_cmd_name"]) {
+        subs_.push_back(core_.GetChannelHandle().GetSubscriber(cfg_node["sub_actuator_cmd_name"].as<std::string>()));
+        ret &= aimrt::channel::Subscribe<my_ros2_proto::msg::JointCommand>(subs_.back(),
+          [this](const std::shared_ptr<const my_ros2_proto::msg::JointCommand>& msg) {
+            for (const auto& controller : controller_map_) {
+              controller.second->SetActuatorCmdData(*msg);
+            }
+          });
+        AIMRT_CHECK_ERROR_THROW(ret, "Subscribe actuator cmd failed.");
+      }
+
+      if (cfg_node["sub_actuator_state_name"]) {
+        subs_.push_back(core_.GetChannelHandle().GetSubscriber(cfg_node["sub_actuator_state_name"].as<std::string>()));
+        ret &= aimrt::channel::Subscribe<sensor_msgs::msg::JointState>(subs_.back(),
+          [this](const std::shared_ptr<const sensor_msgs::msg::JointState>& msg) {
+            for (const auto& controller : controller_map_) {
+              controller.second->SetActuatorStateData(*msg);
+            }
+          });
+        AIMRT_CHECK_ERROR_THROW(ret, "Subscribe actuator state failed.");
+      }
+
       // 控制器发布
       joint_cmd_pub_ = core_.GetChannelHandle().GetPublisher(cfg_node["pub_joint_cmd_name"].as<std::string>());
       executor_ = core_.GetExecutorManager().GetExecutor("rl_control_pub_thread");
@@ -222,4 +244,3 @@ bool ControlModule::MainLoop() {
 }
 
 }  // namespace xyber_x1_infer::rl_control_module
-

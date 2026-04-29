@@ -377,6 +377,19 @@ void RLController::LogRound3DiagnosticData() {
             << ",tau_des_lpf_" << name
             << ",is_parallel_" << name;
       }
+      if (!actuator_names_.empty()) {
+        for (const auto& name : actuator_names_) {
+          round3_diag_file_
+              << ",actuator_cmd_pos_" << name
+              << ",actuator_cmd_vel_" << name
+              << ",actuator_cmd_effort_" << name
+              << ",actuator_cmd_kp_" << name
+              << ",actuator_cmd_kd_" << name
+              << ",actuator_state_pos_" << name
+              << ",actuator_state_vel_" << name
+              << ",actuator_state_effort_" << name;
+        }
+      }
       round3_diag_file_ << "\n";
       round3_diag_logging_triggered_ = true;
       round3_diag_log_count_ = 0;
@@ -420,6 +433,32 @@ void RLController::LogRound3DiagnosticData() {
           << "," << last_tau_des_raw_[ii]
           << "," << last_tau_des_lpf_[ii]
           << "," << last_is_parallel_joint_[ii];
+    }
+  }
+  {
+    std::shared_lock<std::shared_mutex> lock(actuator_state_mutex_);
+    if (!actuator_names_.empty()) {
+      for (size_t ii = 0; ii < actuator_names_.size(); ++ii) {
+        const bool cmd_valid = ii < actuator_cmd_data_.name.size();
+        const bool state_valid = ii < actuator_state_data_.name.size();
+        round3_diag_file_
+            << ","
+            << (cmd_valid ? actuator_cmd_data_.position[ii] : std::numeric_limits<double>::quiet_NaN())
+            << ","
+            << (cmd_valid ? actuator_cmd_data_.velocity[ii] : std::numeric_limits<double>::quiet_NaN())
+            << ","
+            << (cmd_valid ? actuator_cmd_data_.effort[ii] : std::numeric_limits<double>::quiet_NaN())
+            << ","
+            << (cmd_valid ? actuator_cmd_data_.stiffness[ii] : std::numeric_limits<double>::quiet_NaN())
+            << ","
+            << (cmd_valid ? actuator_cmd_data_.damping[ii] : std::numeric_limits<double>::quiet_NaN())
+            << ","
+            << (state_valid ? actuator_state_data_.position[ii] : std::numeric_limits<double>::quiet_NaN())
+            << ","
+            << (state_valid ? actuator_state_data_.velocity[ii] : std::numeric_limits<double>::quiet_NaN())
+            << ","
+            << (state_valid ? actuator_state_data_.effort[ii] : std::numeric_limits<double>::quiet_NaN());
+      }
     }
   }
   round3_diag_file_ << "\n";

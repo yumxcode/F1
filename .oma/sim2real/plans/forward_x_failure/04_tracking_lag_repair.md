@@ -1,6 +1,6 @@
 # Round 3B Tracking Lag 修复线
 
-状态：`ready to execute`。本线由 [03_ankle_landing_attitude_resolution.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/03_ankle_landing_attitude_resolution.md:1) 直接触发。
+状态：`executed`。本线由 [03_ankle_landing_attitude_resolution.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/03_ankle_landing_attitude_resolution.md:1) 直接触发，本轮执行结论见 [04_tracking_lag_repair.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/04_tracking_lag_repair.md:1)。
 
 ## 目标
 
@@ -64,6 +64,22 @@
 - `effective_delay_to_touch_tracking_err_rad` 是否明显下降
 - 是否引入新的 touchdown 振荡或明显过冲
 
+### 当前样本有效性约束
+
+- `35 / 0.5`：保留，作为未改参 baseline
+- `50 / 0.8`：保留，作为 B1 主试验样本
+- `40 / 0.5`：**当前剔除，不纳入结论**
+
+剔除原因：
+
+- 现有两份 `40 / 0.5` 日志虽然参数反推一致，但两段数据全程表现为：
+  - `left_contact = 1`
+  - `right_contact = 1`
+  - 无可用 touchdown 边沿
+  - 相对脚高近似常值
+- 因此它们更像“采集状态异常 / 未形成有效摆腿落地事件”的无效样本，而不是可用于 Round 3 touchdown 诊断的正常试验数据
+- 在复测出新的 `40 / 0.5` 有效日志之前，禁止用这两份数据支持任何优劣判断
+
 ### Test B2. 右踝双轴一致性增强
 
 前提：
@@ -109,3 +125,24 @@
 
 - 若本线成功：回到 Round 3 主线复判 `command_not_flat` 与 `coupled_geometry`
 - 若本线失败：不要继续盲目增大踝参数，转向几何/映射或策略侧问题
+
+## 本轮执行结论
+
+当前按“前 `4` 个 touchdown 优先”的新口径，`04` 已完成一轮有效样本验证，结论如下：
+
+- `35 / 0.5 baseline`：前 `4` 步为 `command_not_flat 2 / coupled_geometry 2`
+- `35 / 0.5 retest`：前 `4` 步为 `command_not_flat 3 / tracking_lag 1`
+- `50 / 0.8`：前 `4` 步为 `command_not_flat 2 / coupled_geometry 2`
+- `40 / 0.8`：前 `4` 步为 `command_not_flat 2 / filter_delay 1 / tracking_lag 1`
+
+统一判断：
+
+1. 所有有效样本前 `4` 步仍然全部命中 `severe_foot_flat_touchdown`
+2. `tracking_lag` 不是前 `4` 步里稳定、唯一、可单靠单轴增益关闭的主因
+3. 仅沿 `right_ankle_roll_joint` 的单轴 `kp/kd` 调节，会在 `tracking_lag / filter_delay / coupled_geometry / command_not_flat` 之间转移表现，但不能关闭主问题
+4. 因此本线按“单轴 right roll 参数扫描”收口，不再继续盲目扩大 `right_ankle_roll_joint` 参数
+
+后续动作：
+
+- 保留 `tracking_lag` 为并发问题标签，不再作为当前第一修复入口
+- 优先转向 `command_not_flat / coupled_geometry / filter_delay` 的联合排查

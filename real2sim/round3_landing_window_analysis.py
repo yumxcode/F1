@@ -88,6 +88,7 @@ STABLE_TOUCHDOWN_MAX_FLAT_ERR_RATE = 1.2
 STABLE_TOUCHDOWN_MAX_FOOT_X_RATE = 0.20
 TOUCHDOWN_DEDUP_SEC = 0.08
 SEVERE_FOOT_FLAT_ERROR_RAD = 1.0
+EARLY_TOUCHDOWN_LIMIT = 4
 
 
 @dataclass
@@ -598,13 +599,15 @@ def write_csv(path, rows):
         writer.writerows(rows)
 
 
-def write_summary_md(path, diag_path, summaries):
+def write_summary_md(path, diag_path, summaries, title="Round 3 Landing Window Summary", note=None):
     mean_clearance = np.mean([row["max_swing_clearance_m"] for row in summaries]) if summaries else float("nan")
     mean_flat_error = np.mean([row["foot_flat_error_touch_rad"] for row in summaries]) if summaries else float("nan")
     with open(path, "w") as handle:
-        handle.write("# Round 3 Landing Window Summary\n\n")
+        handle.write(f"# {title}\n\n")
         handle.write(f"- Source log: `{diag_path}`\n")
         handle.write(f"- Touchdowns analyzed: `{len(summaries)}`\n")
+        if note:
+            handle.write(f"- Note: {note}\n")
         handle.write(f"- Mean max swing clearance: `{mean_clearance:.4f} m`\n")
         handle.write(f"- Mean touchdown foot-flat error: `{mean_flat_error:.4f} rad`\n\n")
         handle.write("| side | touchdown_time_sec | primary_flag | all_flags | max_swing_clearance_m | clearance_at_minus_50ms_m | foot_flat_error_touch_rad |\n")
@@ -623,19 +626,36 @@ def main():
     attach_fk_metrics(rows)
     events = detect_touchdowns(rows)
     summaries = [summarize_event(rows, event) for event in events]
+    early_summaries = summaries[:EARLY_TOUCHDOWN_LIMIT]
 
     base_name = os.path.splitext(os.path.basename(diag_path))[0]
     per_frame_path = os.path.join(OUT_DIR, f"{base_name}_fk_metrics.csv")
     touchdown_path = os.path.join(OUT_DIR, f"{base_name}_touchdown_summary.csv")
     summary_md_path = os.path.join(OUT_DIR, f"{base_name}_summary.md")
+    early_touchdown_path = os.path.join(
+        OUT_DIR, f"{base_name}_touchdown_summary_first{EARLY_TOUCHDOWN_LIMIT}.csv"
+    )
+    early_summary_md_path = os.path.join(
+        OUT_DIR, f"{base_name}_summary_first{EARLY_TOUCHDOWN_LIMIT}.md"
+    )
 
     write_csv(per_frame_path, rows)
     write_csv(touchdown_path, summaries)
     write_summary_md(summary_md_path, diag_path, summaries)
+    write_csv(early_touchdown_path, early_summaries)
+    write_summary_md(
+        early_summary_md_path,
+        diag_path,
+        early_summaries,
+        title=f"Round 3 Early Touchdown Summary (First {EARLY_TOUCHDOWN_LIMIT})",
+        note="Use this slice as the primary diagnosis view when later steps are contaminated by unrecovered instability.",
+    )
 
     print(f"Round 3 per-frame metrics: {per_frame_path}")
     print(f"Round 3 touchdown summary: {touchdown_path}")
     print(f"Round 3 markdown summary: {summary_md_path}")
+    print(f"Round 3 early touchdown summary: {early_touchdown_path}")
+    print(f"Round 3 early markdown summary: {early_summary_md_path}")
 
 
 if __name__ == "__main__":
