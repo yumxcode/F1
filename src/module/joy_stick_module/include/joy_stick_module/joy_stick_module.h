@@ -67,6 +67,7 @@ class JoyStickModule : public aimrt::ModuleBase {
   std::atomic_bool walk_mode_active_ = false;
   std::vector<bool> prev_walk_buttons_;  // 用于上升沿检测
   std::vector<aimrt::channel::SubscriberRef> subs_;
+  bool joystick_missing_logged_ = false;
 };
 
 }  // namespace xyber_x1_infer::joy_stick_module

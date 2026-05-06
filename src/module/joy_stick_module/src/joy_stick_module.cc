@@ -84,12 +84,17 @@ bool JoyStickModule::Initialize(aimrt::CoreRef core) {
         subs_.push_back(walk2_sub);
 
         auto stop_cb = [this](const std::shared_ptr<const std_msgs::msg::Float32>&) {
-          walk_mode_active_ = false;
-          AIMRT_INFO("[JoyStick] Walk mode DEACTIVATED via topic");
+          if (walk_mode_active_.exchange(false)) {
+            AIMRT_INFO("[JoyStick] Walk mode DEACTIVATED via topic");
+          }
         };
         auto idle_sub = core_.GetChannelHandle().GetSubscriber("/idle_mode");
         aimrt::channel::Subscribe<std_msgs::msg::Float32>(idle_sub, stop_cb);
         subs_.push_back(idle_sub);
+
+        auto stand_sub = core_.GetChannelHandle().GetSubscriber("/stand_mode");
+        aimrt::channel::Subscribe<std_msgs::msg::Float32>(stand_sub, stop_cb);
+        subs_.push_back(stand_sub);
 
         auto zero_sub = core_.GetChannelHandle().GetSubscriber("/zero_mode");
         aimrt::channel::Subscribe<std_msgs::msg::Float32>(zero_sub, stop_cb);
@@ -143,8 +148,9 @@ void JoyStickModule::MainLoop() {
 
     // 检查手柄数据是否有效（SDL 未检测到手柄时 buttons 和 axis 为空）
     if (joy_data.buttons.empty() || joy_data.axis.empty()) {
-      if (log_cnt % 100 == 0) {
+      if (!joystick_missing_logged_) {
         AIMRT_WARN("[JoyStick] No joystick detected, buttons={}, axis={}", joy_data.buttons.size(), joy_data.axis.size());
+        joystick_missing_logged_ = true;
       }
       // 无手柄但行走模式已激活：仍然持续发布常量速度
       if (walk_mode_active_) {
@@ -167,6 +173,11 @@ void JoyStickModule::MainLoop() {
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
       continue;
+    }
+
+    if (joystick_missing_logged_) {
+      AIMRT_INFO("[JoyStick] Joystick detected again, buttons={}, axis={}", joy_data.buttons.size(), joy_data.axis.size());
+      joystick_missing_logged_ = false;
     }
 
     // 初始化 prev_walk_buttons_（首次循环）
