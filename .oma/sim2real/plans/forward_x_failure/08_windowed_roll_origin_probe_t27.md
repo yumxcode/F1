@@ -1,6 +1,6 @@
 # 08_windowed_roll_origin_probe_t27
 
-状态：`active`
+状态：`done`
 
 ## 目标
 
@@ -26,3 +26,6 @@
 - 能说明 `sole_roll` 更接近 output 链，还是更接近执行链 / 关节响应
 - 能判断这份 t27 数据是否延续了 `07` 里的结论
 
+## 当前收口
+
+结果见 [08_windowed_roll_origin_probe_t27.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/08_windowed_roll_origin_probe_t27.md:1)。本线延续 `07` 结论：t27 数据中 `sole_roll` 仍更偏执行链 / 关节响应；但 swing 小信号部分已由 `13` 重新解释为 dead-zone / threshold-sensitive 的并发因素。

@@ -239,12 +239,26 @@
 2. 但因为 ankle 不是这份日志里最慢的一组，`tracking_lag` 不能替代 `coupled_geometry` 成为唯一解释。
 3. `command_not_flat` 依旧是上游意图层问题，不能被“有延迟”这一事实吞掉。
 
-## 后续动作
+## 后续动作（进度标记）
 
-1. 不再继续盲目扩大 ankle `kp/kd` 扫参
-2. 保留 `tracking_lag` 为并发问题标签，但不再作为当前第一修复入口
-3. 后续主线正式转向：
-   - `coupled_geometry`
-   - `command_not_flat`
-   - `filter_delay`
+1. ✅ 不再继续盲目扩大 ankle `kp/kd` 扫参（已执行）
+2. ✅ 保留 `tracking_lag` 为并发问题标签，不再作为当前第一修复入口（已执行）
+3. ✅ 后续主线已转向 `05_coupled_geometry_probe`（已执行）
+   - `coupled_geometry` → `05A/05B/05C` 完成，`05D` 待执行
+   - `command_not_flat` → 在 `05` 系列排查中统一处理，不是单独根因
+   - `filter_delay` → 无稳定主导证据，不再单独推进
 4. 进入新的 `coupled_geometry` 专项排查阶段
+
+## 指标字典
+
+| 指标 / 标签 | 含义 | 当前用途 |
+|---|---|---|
+| `baseline` / `retest` | 同一 `35 / 0.5` 参数下的原始样本与复测样本 | 判断现象是否可重复 |
+| `kp/kd` | ankle 控制参数组合 | 只用于观察 tradeoff，不作为单独修复结论 |
+| `first_4_touchdowns` | 每组参数优先比较前 `4` 个 touchdown | 避免不同日志长度导致后段样本混入 |
+| `severe_foot_flat_touchdown` | touchdown 时严重脚底不平 | 判断主问题是否关闭 |
+| `tracking_lag` | 目标有调平意图但真实关节没到位 | 当前只作为并发标签，不再作为单轴第一修复入口 |
+| `filter_delay` | LPF 后目标相对 raw 迟到 | `40 / 0.8` 中出现但未稳定成为主因 |
+| `coupled_geometry` | joint-space 解释不完 foot-space 姿态 | 进入 `05` 的直接触发条件 |
+| `command_not_flat` | touchdown 前目标本身不足以调平 | 与 coupled geometry 一起保留为后续主线 |
+| `tradeoff_between_flags` | 调参后故障标签在多类之间转移 | 本轮否定继续盲扫 ankle `kp/kd` 的依据 |

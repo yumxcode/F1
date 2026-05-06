@@ -2,6 +2,8 @@
 
 轮次目标：完成基础部署链路验证，确认站立与 RL 小速度初测是否可用。
 
+统一进展和指标口径见 [00_forward_x_failure_progress_review.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/00_forward_x_failure_progress_review.md:1)。
+
 ## 阶段结果
 
 | 阶段 | 结果 | 结论 | 后续动作 |
@@ -21,3 +23,12 @@
 - 现阶段暂不建议优先修改：
   - `action_scale`
   - `pd_zero/pd_stand`
+
+## 指标字典
+
+| 指标 / 现象 | 含义 | 当前用途 |
+|---|---|---|
+| `sensor_and_sign_check` | 传感器、关节顺序、符号和零位基础检查 | 确认不是基础链路错误 |
+| `zero -> stand -> hold` | 零位、站立位、保持站立流程 | 确认 PD 站立基础稳定 |
+| `rl_idle_and_in_place_step` | RL 小速度初测 | 暴露前进不足和踝轻微抖动 |
+| `action_scale` | 策略输出到关节目标的缩放 | 当前不是第一优先修改项 |

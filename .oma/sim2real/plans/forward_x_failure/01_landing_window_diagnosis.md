@@ -1,6 +1,8 @@
 # Round 3 摆腿清高与落地窗口联合诊断方案
 
-状态：`ready to plan`。本轮由真机数据仿真回放的新现象触发：机器人无法前进行走时，脚踝落地瞬间脚底板没有调整到位，表现为斜着落地；最新观察进一步显示，落地时双脚高度差不够，摆动脚清高不足，可能由髋关节或膝关节摆动时机不对、摆动幅度不够导致。
+状态：`done`。本轮由真机数据仿真回放的新现象触发：机器人无法前进行走时，脚踝落地瞬间脚底板没有调整到位，表现为斜着落地；后续结果已确认当前第一阻塞项是 `severe_foot_flat_touchdown`。摆腿清高、髋膝时序和执行链问题作为并发问题保留，但不再作为当前第一入口。
+
+统一进展和指标口径见 [00_forward_x_failure_progress_review.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/00_forward_x_failure_progress_review.md:1)。
 
 ## 结论先行
 
@@ -128,17 +130,13 @@ H8：策略给出了足够的髋/膝摆动目标，但实际 `q` 跟不上，主
 
 - Round 2C 保留，但只解决已经明确的单轴触地 timing / 振荡 / 阈值问题。
 - Round 3 改为本文件的摆腿清高与落地窗口联合诊断，不再直接低速行走验证。
-- 原 [02_low_speed_walk_validation_candidate.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/forward_x_failure/02_low_speed_walk_validation_candidate.md) 降级为下一阶段候选，需等待本轮判因完成后按结论改写。
+- 原 [02_low_speed_walk_validation_candidate.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/forward_x_failure/02_low_speed_walk_validation_candidate.md) 降级为下一阶段候选；后续 `05/12/13` 已把进入门槛进一步收紧为先完成 `05D FK Foot-Frame / Contact` 现场复核。
 
-## 本轮结束条件
+## 本轮结束条件（已全部达成 ✅）
 
-- 至少分析左右脚各 `5` 次 touchdown。
-- 输出每次 touchdown 的 `max_swing_clearance`、`clearance_peak_phase`、触地前 `50 ms` 双脚高度差、`foot_flat_error`、hip/knee/ankle `pos_des-q`、LPF 延迟、effort 峰值。
-- 给出主导判因：`foot_clearance_deficit / hip_knee_command_low / hip_knee_tracking_lag / early_knee_extension / command_not_flat / tracking_lag / effort_limited / filter_delay / phase_mismatch / coupled_geometry` 之一或组合。
-- 明确下一步是：
-  - 新建髋/膝摆腿专项
-  - 回 Round 2C 继续单轴参数修复
-  - 新建 LPF/延迟试验
-  - 新建 phase/contact 对齐试验
-  - 回设计侧修改策略/奖励/观测
-  - 允许进入低速行走复测
+- ✅ 已分析左右脚各 7/8 次 touchdown（Round 3 日志，`7/7` → 后续 `8/8`）
+- ✅ 已输出每次 touchdown 的 `max_swing_clearance`、触地前指标和 `foot_flat_error`（见 [results/02_round3_landing_window_diagnosis.md](../../results/forward_x_failure/02_round3_landing_window_diagnosis.md)）
+- ✅ 主导判因已确定：`severe_foot_flat_touchdown` 为主因（`8/8`），`foot_clearance_deficit` 和 `hip_knee_tracking_lag` 作为并发问题保留
+- ✅ 下一步已明确为：新建踝落地姿态专项（即 `03_ankle_landing_attitude_resolution`），不直接进入低速行走复测
+
+> 本轮执行结果详见 [results/02_round3_landing_window_diagnosis.md](../../results/forward_x_failure/02_round3_landing_window_diagnosis.md)

@@ -57,3 +57,22 @@
 2. `sole_roll` 更接近 `pos_des_lpf / pos` 这条执行链。
 3. 所以问题更像是“意图有了，但执行链没有在 touchdown 前稳定兑现”，而不是纯 output 错误。
 4. 这也解释了为什么低 kp 能减轻抖动，但不能关闭镜像偏置和触地不平。
+
+## Dead-zone 边界
+
+这里的 `execution_chain_dominant` 同样不能直接读成“机械结构一定是主因”。
+在 `swing` 窗，`action / pos_des_raw` 的幅值本身偏小时，死区 / 阈值敏感区会放大局部相位滞后，使 `sole_roll` 看起来更像跟随执行链。
+
+## 指标字典
+
+| 指标 / 标签 | 含义 | 当前用途 |
+|---|---|---|
+| `action` | 网络输出层信号 | 判断 output 侧是否直接主导 `sole_roll` |
+| `pos_des_raw` | action 缩放、叠加 init、限幅后的 joint-space 原始目标 | `13` 后续用于 swing 小信号死区审视 |
+| `pos_des_lpf` | 低通后的 joint-space 目标 | 判断 target 经过滤波后的执行链位置 |
+| `pos` | `/joint_states` 映射后的 joint-space 真实位置 | 执行链兑现结果 |
+| `swing source` | swing 窗判定的 `sole_roll` 主导来源 | 区分接触前来源 |
+| `touchdown source` | touchdown 窗判定的 `sole_roll` 主导来源 | 区分触地瞬间来源 |
+| `execution_chain_dominant` | `sole_roll` 更接近 `pos_des_lpf / pos` | 当前主趋势，但包含 dead-zone 影响可能 |
+| `output_chain_dominant` | `sole_roll` 更接近 `action / pos_des_raw` | 当前少数样本，不作为全局反例 |
+| `mixed_or_uncertain` | 多条链路相近或窗口内证据不足 | 保留不确定样本 |

@@ -286,25 +286,33 @@
      3. `filter_delay`
      4. `tracking_lag` 只作为并发问题复核，而不再单独作为第一修复入口
 
-## 下一步动作
+## 下一步动作（进度标记）
 
-按当前综合口径执行：
+1. ✅ `command_not_flat` 主线 — 已在 `04/05` 中持续排查；`05C` 最终确认不是唯一根因，touchdown 残差归到 foot-space / contact frame
 
-1. `command_not_flat` 主线
-   - 继续回放并核查 touchdown 前窗口的 `raw` 意图方向
-   - 重点判断“更稳但不往前走”是否本质来自上游意图不足
+2. ✅ `coupled_geometry` 主线 — 已在 `05` 专项中深挖，`05A/05B/05C` 均已完成；当前收口为 `fk_foot_frame_residual_candidate 3/4`；⬜ 等待 `05D` 现场验证
 
-2. `coupled_geometry` 主线
-   - 查 pitch/roll 耦合、零位偏置、并联映射与左右脚几何差异
-   - 重点解释“参数调软后更稳，但脚底仍以错误几何姿态触地”的原因
+3. ⬜ `filter_delay` 复核线 — **未正式完成**
+   - `40/0.8` 下出现过 `filter_delay` 1 个样本，但后续多组试验中均未稳定复现
+   - **当前处理**：`filter_delay` 无稳定主导证据，**不作为当前优先推进方向**；待问题整体收敛后如有必要再复核
+   - 此条目不再主动推进
 
-3. `filter_delay` 复核线
-   - 对 `40 / 0.8` 前几步里出现的 `filter_delay` 做针对性复核
-   - 判断它是偶发样本还是新的稳定风险
+4. ✅ `tracking_lag` 复核线 — 已保留为并发问题标签；`04` 已证明单轴扫参不能关闭主问题，不再单独作为第一入口
 
-4. `tracking_lag` 复核线
-   - 保留为并发问题标签
-   - 不再继续单独做 `right roll` 单轴扫参
+## 指标字典
+
+| 指标 / 标签 | 含义 | 当前用途 |
+|---|---|---|
+| `sole_pitch_touch_rad` | touchdown 时脚底 pitch 姿态 | 与 roll 对比，判断 touchdown 主导轴 |
+| `sole_roll_touch_rad` | touchdown 时脚底 roll 姿态 | 当前 `8/8` roll 主导的核心依据 |
+| `ankle_pitch_err_touch_rad` | touchdown 时 ankle pitch 目标 / 实际误差 | 判断 pitch 轴是否为跟踪主因 |
+| `ankle_roll_err_touch_rad` | touchdown 时 ankle roll 目标 / 实际误差 | 判断 roll 轴是否存在 tracking lag |
+| `command_not_flat` | 目标本身不足以把脚底调平 | 三层根因之一；后续不能单独解释全部 residual |
+| `tracking_lag` | 目标已有调平意图但真实关节没到位 | 后续统一读作执行链响应问题 |
+| `filter_delay` | raw 目标早于 LPF 目标，导致调平动作迟到 | 当前无稳定主导证据 |
+| `coupled_geometry` | joint-space 角度不能充分解释 foot-space 姿态 | 后续收紧为 touchdown foot-space / contact residual |
+| `effective_delay_to_touch_tracking_err_rad` | 经过延迟补偿后 touchdown 相关的跟踪误差 | 对 tracking_lag 样本做排序，不直接替代主因分类 |
+| `root_cause_distribution` | 三层根因分类计数 | 当前统一为 `command_not_flat 4 / tracking_lag 2 / coupled_geometry 2` |
 
 ## 阻塞状态
 

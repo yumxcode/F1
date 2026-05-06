@@ -1,6 +1,6 @@
 # Round 3D Delay Chain Probe
 
-状态：`active`。本专项用于回答一个更直接的问题：
+状态：`done`。本专项用于回答一个更直接的问题：
 
 1. 模型输出 `action` 到关节目标 `target` 是否存在明显延迟
 2. 关节目标到关节位姿 `pos`、执行器电流 `current` 的响应延迟各是多少
@@ -41,3 +41,10 @@
 2. 明确判断延迟主要在哪一段
 3. 若当前日志不足以分辨 motor state 与 joint state，需要补录 `/actuator_states`
 
+## 当前收口
+
+本线已完成首轮收口，结果见 [06_delay_chain_probe.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/06_delay_chain_probe.md:1)：
+
+- `action -> target` 近似 `0 ms`
+- 主要延迟来自执行链，而不是 policy output
+- 后续已由 `10/11/12` 继续拆到 `/actuator_states` 级别

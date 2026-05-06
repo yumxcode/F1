@@ -1,0 +1,7 @@
+case_label,mode,events,mean_abs_sole_roll,mean_output_to_sole_lag_ms,mean_exec_proxy_to_sole_lag_ms,mean_exec_internal_lag_ms,execution_chain_support_mean,dominant_source,notes
+25/0.5 all_ankles,proxy,4,1.6298453064645682,14.140963554382324,16.497790813446045,143.76646280288696,1.0,execution_chain_dominant,proxy: pos_des_lpf->pos used as execution-chain surrogate
+25/0.5 right_roll,proxy,4,1.5744255211640683,29.73836660385132,9.150266647338867,141.82913303375244,1.0,execution_chain_dominant,proxy: pos_des_lpf->pos used as execution-chain surrogate
+35/0.5 baseline,proxy,4,1.694107396852929,42.844295501708984,0.0,133.0428123474121,0.75,execution_chain_dominant,proxy: pos_des_lpf->pos used as execution-chain surrogate
+40/0.8 right_roll,proxy,4,1.604279420397573,4.6356916427612305,71.85322046279907,134.43505764007568,0.5,output_chain_dominant,proxy: pos_des_lpf->pos used as execution-chain surrogate
+50/0.8 right_roll,proxy,4,1.7233324293100147,30.082404613494873,18.512248992919922,136.52783632278442,0.75,execution_chain_dominant,proxy: pos_des_lpf->pos used as execution-chain surrogate
+25/0.5 all_ankles (actuator-state),actuator_state,4,1.7463419953257158,8.679866790771484,32.549500465393066,29.29455041885376,1.0,execution_chain_dominant,actuator-state: actuator_cmd->actuator_state->joint_pos split available

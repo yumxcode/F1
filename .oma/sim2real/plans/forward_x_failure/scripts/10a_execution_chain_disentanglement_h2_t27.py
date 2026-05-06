@@ -283,7 +283,7 @@ def main():
         handle.write("- 目标是判断：`sole_roll` 是否仍然主要跟随执行链，而不是即时 output。\n\n")
 
         handle.write("## 摘要\n\n")
-        handle.write("| case | events | mean |sole_roll| | mean lpf->pos lag (ms) | mean pos->sole lag (ms) | H2 proxy support | dominant source |\n")
+        handle.write("| case | events | mean_abs_sole_roll | mean lpf->pos lag (ms) | mean pos->sole lag (ms) | H2 proxy support | dominant source |\n")
         handle.write("|---|---:|---:|---:|---:|---:|---|\n")
         for row in summary_rows:
             handle.write(

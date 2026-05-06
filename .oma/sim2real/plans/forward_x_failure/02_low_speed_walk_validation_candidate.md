@@ -1,6 +1,8 @@
 # Round 4 低速步态验证候选方案
 
-状态：`blocked by swing_clearance_and_landing_window_diagnosis`。本方案原为 Round 3 候选执行稿；在真机数据仿真回放发现“踝关节落地时脚底板没有调整到位、斜着落地”，以及新增发现“落地时双脚高度差不够、摆动脚清高不足”后，本方案降级为 Round 4 候选。**必须等待 Round 3 摆腿清高与落地窗口联合诊断完成，并确认下一步仍适合步态复测后才允许执行**。
+状态：`blocked by 05D_fk_foot_frame_contact_review`。本方案原为 Round 3 候选执行稿；在真机数据仿真回放发现“踝关节落地时脚底板没有调整到位、斜着落地”，以及新增发现“落地时双脚高度差不够、摆动脚清高不足”后，本方案降级为 Round 4 候选。
+
+当前 `01/03/04/06-13` 已完成阶段性收口，但 `05C` 只给出 FK 派生的 `fk_foot_frame_residual_candidate`，尚需先完成 `05D FK Foot-Frame / Contact 现场复核`。因此本方案仍保持 blocked。统一进展见 [00_forward_x_failure_progress_review.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/00_forward_x_failure_progress_review.md:1)。
 
 目标：在不改动策略模型与步态时序参数的前提下，仅替换 `rl_walk_leg` 的踝关节 `kp/kd` 为 `Round 2A` 收敛值，验证真机低速行走的连续性、推进性和踝关节抖动是否改善。
 
@@ -10,8 +12,13 @@
 - `Round 2A` 已在悬空工况下收敛出各关节 best_air_candidate，`Round 2B` 触地退化测量将决定这组参数能否直接用于步态。
 - 如果只改踝关节参数后，连续性或抖动已经明显改善，就没有必要立即引入 `lpf_conf.wc`、`action_scale` 等新变量。
 - 新增约束：若 Round 3 证明落地斜脚由 `command_not_flat`、`phase_mismatch` 或 `filter_delay` 主导，则本轮不能直接执行；必须先改策略/相位/LPF 后再重写本方案。
+  > 🔍 **Round 3 结论**：`coupled_geometry` 是主导（非 `command_not_flat` 单独主导），`filter_delay` 无稳定主导证据。此约束**部分触发**：问题非策略/相位/LPF，但仍未关闭，本轮继续 blocked。
 - 新增约束：若 Round 3 证明双脚高度差不足由 `foot_clearance_deficit`、`hip_knee_command_low`、`hip_knee_tracking_lag` 或 `early_knee_extension` 主导，则本轮不能直接执行；必须先完成髋/膝摆腿专项或策略设计反馈。
+  > 🔍 **Round 3 结论**：`foot_clearance_deficit` / `hip_knee_tracking_lag` 作为并发问题保留，但**非主因**，主因是 `severe_foot_flat_touchdown`。此约束**未直接触发**（并发问题，非主导），但主问题仍未关闭，本轮仍 blocked。
 - 新增约束：若 Round 3 证明落地斜脚由 `tracking_lag` 主导，本轮使用的踝关节参数必须先替换为 Round 2C 对应关节的 timing 修复结果。
+  > 🔍 **Round 3 结论**：`tracking_lag` **不是**稳定的主导因（04 已证明单轴扫参转移表现但不关闭主问题）。此约束**未直接触发**。
+
+**⏸ 当前 block 原因**：`05C` 将残差收口为 `fk_foot_frame_residual_candidate`，需先完成 `05D FK Foot-Frame / Contact 现场复核`，明确 FK foot frame 是否可信并给出可执行修正后，才允许重启本方案。
 
 ## 采用参数
 

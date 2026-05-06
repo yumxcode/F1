@@ -1,6 +1,6 @@
 # 07_windowed_roll_origin_probe
 
-状态：`active`
+状态：`done`
 
 ## 目标
 
@@ -48,3 +48,6 @@
   - touchdown 窗更偏 output 还是执行链
 - 能说明这份数据里 `sole_roll` 的主导来源是否被延迟链解释
 
+## 当前收口
+
+结果见 [07_windowed_roll_origin_probe.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/07_windowed_roll_origin_probe.md:1)。本线已确认：在该历史日志里，`sole_roll` 更偏执行链响应，不直接跟随即时 output；但这只说明执行链是表现层放大器，不能替代 `05` 的 touchdown geometry / contact residual。

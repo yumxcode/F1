@@ -104,27 +104,29 @@
 - 检查零位偏置
 - 检查执行限幅或额外保护逻辑
 
-## 通过标准
+## 通过标准（执行结果对照）
 
-本线关闭条件：
+本线关闭条件对照：
 
-1. 新日志中原先两次 `tracking_lag` 类样本不再出现
-2. `tracking_lag` 不再是主导判因
-3. 没有把问题简单转移成更强的过冲/振荡
-4. `foot_flat_error_touch_rad` 有实质下降
+1. ❌ 原先两次 `tracking_lag` 样本在部分参数组仍出现（在不同参数间转移）
+2. ✅ `tracking_lag` 不是稳定、唯一可关闭的主导判因（已证明参数改变只转移表现）
+3. ✅ 未出现明显转移成更强过冲/振荡（低 kp 方向可压住抖动）
+4. ❌ `foot_flat_error_touch_rad` 无实质下降（仍 `severe_foot_flat_touchdown`）
 
-## 失败判据
+> **收口**：本线以"否定性收口"关闭——单轴 right-roll 扫参不能关闭主问题，已停止继续盲扫。
 
-若出现以下任一情况，则停止沿当前参数方向继续推：
+## 失败判据（已触发）
 
-- touchdown 前后出现明显振荡
-- `foot_flat_error_touch_rad` 不降反升
-- `tracking_lag` 不变，但 `command_not_flat` / `coupled_geometry` 明显主导
+以下条件已触发，已停止继续推参数：
 
-## 下一步衔接
+- ✅（触发）高 kp 时 touchdown 后出现更明显接触抖动
+- ✅（触发）`foot_flat_error_touch_rad` 未明显下降
+- ✅（触发）`tracking_lag` 在 kp 变化时转移为 `command_not_flat / coupled_geometry`
 
-- 若本线成功：回到 Round 3 主线复判 `command_not_flat` 与 `coupled_geometry`
-- 若本线失败：不要继续盲目增大踝参数，转向几何/映射或策略侧问题
+## 下一步衔接（已执行）
+
+- ✅ 本线按"否定性收口"关闭，已不再继续扩大踝参数
+- ✅ 正式转向 `coupled_geometry / command_not_flat / filter_delay` 联合排查（`05_coupled_geometry_probe`）
 
 ## 本轮执行结论
 

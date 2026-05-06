@@ -2,6 +2,12 @@ include(FetchContent)
 
 message(STATUS "get aimrt ...")
 
+# AimRT pulls in libunifex/io_uring on Linux. With newer GCC + liburing headers,
+# GNU C extensions in io_uring.h trigger pedantic diagnostics that some external
+# targets promote to errors. Relax only this warning class for third-party code.
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=pedantic")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-error=pedantic")
+
 FetchContent_Declare(
   aimrt #
   GIT_REPOSITORY https://github.com/AimRT/AimRT.git

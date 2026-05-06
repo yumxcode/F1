@@ -119,25 +119,37 @@
   - `severe_foot_flat_touchdown` 仍然是最上游主问题
   - `tracking_lag` 仍会出现，但不是当前最稳定、最值得单独作为第一入口的主因
   - 当前更应优先转向 `command_not_flat / coupled_geometry / filter_delay`
+- 再经 `05/12/13` 的后续收口，当前最终入口已进一步固定为 `05D FK Foot-Frame / Contact` 现场复核；本文件里的“下一步动作”保留为 Round 3 当时的历史推进顺序。
 - 当前不允许直接进入低速步态复测或 Round 4 候选验证。
 - 当前不建议把主要精力放在继续争论 `foot_clearance_deficit` 与 `hip_knee_tracking_lag` 谁更主导，因为 touchdown 姿态问题更上游。
 
-## 下一步动作
+## 下一步动作（进度标记）
 
-按优先级推进：
+1. ✅ **踝落地姿态专项** — 已完成（即 `03_ankle_landing_attitude_resolution`）
+   - 结论：`8/8` roll 主导，三层根因 `command_not_flat 4 / tracking_lag 2 / coupled_geometry 2`
+   - 后续由 `04/05/06-13` 持续推进
 
-1. 新建或补充 **踝落地姿态专项**
-   - 重点分析 touchdown 前后 `sole_pitch / sole_roll`
-   - 重点分析 `ankle_pitch_err_touch_rad / ankle_roll_err_touch_rad`
-   - 区分 `command_not_flat / tracking_lag / coupled_geometry / filter_delay`
+2. ⬜ **摆腿后段清高专项** — 尚未单独建立
+   - `clearance_at_minus_50ms` 问题（后段提前下放）当前保留为**次级并发问题**
+   - 待 `05D` 和 touchdown 姿态主因收敛后再复判；当前**不是优先推进方向**
 
-2. 保留 **摆腿后段清高专项**
-   - 继续看 `clearance_at_minus_50ms / -20ms`
-   - 重点区分“中期峰值不足”还是“后半段提前下放”
+3. ✅ **暂缓低速前进复测** — 仍在执行
+   - Round 4 门槛仍关闭；需等 `05D FK Foot-Frame / Contact 现场复核` 完成
 
-3. 暂缓 **低速前进复测**
-   - 进入 Round 4 的门槛仍关闭
-   - 必须先证明 severe flat-touchdown 不再是主导阻塞
+## 指标字典
+
+| 指标 / 标签 | 含义 | 当前用途 |
+|---|---|---|
+| `touchdown_count_after_dedup` | 去重后的独立 touchdown 事件数 | 当前统一使用新版脚本的 `8` 次口径 |
+| `primary_flag_distribution` | 每个 touchdown 的优先级主旗标分布 | 判断第一阻塞项；不能代表并发问题不存在 |
+| `all_flags` / `concurrent_flags_overview` | 同一 touchdown 命中的全部并发 flags | 解释 clearance、髋膝、tracking 等共现风险 |
+| `max_swing_clearance_m` | 摆动期最大足高差 | 判断中期是否完全抬不起来 |
+| `clearance_at_minus_50ms_m` | touchdown 前 `50 ms` 的足高余量 | 判断后段是否提前下放或余量耗尽 |
+| `foot_flat_error_touch_rad` | touchdown 时脚底不平误差 | 当前主阻塞 `severe_foot_flat_touchdown` 的量化指标 |
+| `hip_err_minus_50ms_rad` | touchdown 前 `50 ms` 髋关节跟踪误差 | 髋摆动时序 / 幅值并发风险 |
+| `knee_err_minus_50ms_rad` | touchdown 前 `50 ms` 膝关节跟踪误差 | 膝关节提前伸展或跟踪不足风险 |
+| `knee_peak_to_touchdown_sec` | 膝关节峰值到 touchdown 的时间间隔 | 判断伸膝时机是否过早或过晚 |
+| `touchdown_side_distribution` | 左右脚 touchdown 事件数 | 当前统一口径为 `left = 4`、`right = 4` |
 
 ## 阻塞状态
 

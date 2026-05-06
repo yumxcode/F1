@@ -1,6 +1,8 @@
 # Round 3A 踝落地姿态专项问题解决方案
 
-状态：`ready to execute`。本专项由 [02_round3_landing_window_diagnosis.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/02_round3_landing_window_diagnosis.md:1) 直接触发。当前 `7/7` 独立 touchdown 均判定为 `severe_foot_flat_touchdown`，因此在进入低速前进复测前，必须优先解决 touchdown 时脚板严重不平的问题。
+状态：`done`。本专项由 [02_round3_landing_window_diagnosis.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/02_round3_landing_window_diagnosis.md:1) 直接触发。当前结论已沉淀为：touchdown 姿态 `8/8` roll 主导，三层根因分布为 `command_not_flat 4 / tracking_lag 2 / coupled_geometry 2`；后续 `04/05/06-13` 已进一步把 `tracking_lag` 收为执行链问题，把 `coupled_geometry` 收为 touchdown foot-space / contact residual。
+
+统一进展和指标口径见 [00_forward_x_failure_progress_review.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/00_forward_x_failure_progress_review.md:1)。
 
 ## 目标
 
@@ -71,11 +73,16 @@ raw 目标方向正确，但 `pos_des_lpf` 或实际下发命令到达过晚，�
 - 但 `foot_flat_error` 很大
 - 往往伴随左右脚、内外侧、脚尖脚跟接触模式不一致
 
+## 执行结论（已完成 ✅）
+
+> 本专项已全部完成。Phase A/B/C 均已执行，结果见 [results/03_ankle_landing_attitude_resolution.md](../../results/forward_x_failure/03_ankle_landing_attitude_resolution.md)。
+> **核心结论**：`8/8` roll 主导；三层根因为 `command_not_flat 4 / tracking_lag 2 / coupled_geometry 2`；后续 `04` 处理 `tracking_lag`，`05` 处理 `coupled_geometry`，`filter_delay` 无稳定主导证据。
+
 ## 解决策略
 
-本专项不一次性改很多量。按“先判因，再小步修复”的顺序推进。
+本专项不一次性改很多量。按”先判因，再小步修复”的顺序推进。
 
-### Phase A. 纯分析分型
+### Phase A. 纯分析分型（✅ 已完成）
 
 基于现有 `t26` 结果，把 touchdown 进一步分成姿态型：
 
@@ -96,7 +103,7 @@ raw 目标方向正确，但 `pos_des_lpf` 或实际下发命令到达过晚，�
 - 区分主要是 pitch 轴没收平，还是 roll 轴没收平
 - 判断左右脚是否存在不同模式
 
-### Phase B. 命令链与跟踪链判因
+### Phase B. 命令链与跟踪链判因（✅ 已完成）
 
 对 touchdown 前 `100 / 50 / 20 ms` 做三层比较：
 
@@ -111,7 +118,7 @@ raw 目标方向正确，但 `pos_des_lpf` 或实际下发命令到达过晚，�
 - 若 `lpf` 已平、`q` 不平：归 `tracking_lag`
 - 若单轴都不极端但组合后不平：归 `coupled_geometry`
 
-### Phase C. 最小干预修复试验
+### Phase C. 最小干预修复试验（✅ 已完成，见 04_tracking_lag_repair）
 
 一次只动一个变量，优先级如下：
 
@@ -207,38 +214,30 @@ raw 目标方向正确，但 `pos_des_lpf` 或实际下发命令到达过晚，�
 - 持续 `5 ~ 10 s`
 - 仅验证 severe flat-touchdown 是否明显减少
 
-## 通过标准
+## 通过标准（执行结果对照）
 
-本专项关闭条件：
+本专项关闭条件对照：
 
-1. 新日志中左右脚各至少 `5` 次独立 touchdown
-2. `severe_foot_flat_touchdown` 不再是主导判因
-3. `foot_flat_error_touch_rad`
-   - mean 明显低于本轮 `1.6916`
-   - 且不再系统性落在 `> 1.0 rad`
-4. 能明确归入以下之一并有对应动作：
-   - `tracking_lag`
-   - `filter_delay`
-   - `command_not_flat`
-   - `coupled_geometry`
+1. ✅ 新日志中左右脚各至少 `5` 次独立 touchdown（Round 3：`8` 次）
+2. ❌ `severe_foot_flat_touchdown` 仍是主导判因（`8/8`）—— **问题仍未关闭**，已转向 `05` 专项深挖
+3. ❌ `foot_flat_error_touch_rad` mean = `1.69～1.94 rad`，仍系统性落在 `> 1.0 rad`
+4. ✅ 已明确归因：roll 主导，三层根因 `command_not_flat 4 / tracking_lag 2 / coupled_geometry 2`
 
-## 阻塞规则
+> 本专项"判因"目标达成，"修复"目标未达成（问题仍在 `05` 推进中）。Round 4 继续阻塞。
 
-以下条件任一满足，则继续阻塞 Round 4：
+## 阻塞规则（当前仍触发）
 
-- `severe_foot_flat_touchdown` 仍为主导判因
-- touchdown 事件中左右脚仍系统性斜脚板落地
-- 没有明确区分 `command_not_flat / tracking_lag / filter_delay / coupled_geometry`
+以下条件当前仍满足，Round 4 继续阻塞：
 
-## 产物要求
+- ❌ `severe_foot_flat_touchdown` 仍为主导判因（`05C` 收口为 `fk_foot_frame_residual_candidate`，`05D` 待执行）
+- ❌ touchdown 仍系统性斜脚板落地
 
-本专项执行后至少产出：
+## 产物要求（已完成）
 
-- 一份新的 `t26` 原始日志
-- 一份新的 `touchdown_summary.csv`
-- 一份专项结果文档，回答：
-  - 脚尖/脚跟/内外侧哪类先落为主
-  - pitch 还是 roll 为主导轴
-  - 问题属于 `command_not_flat / tracking_lag / filter_delay / coupled_geometry` 哪一类
-  - 下一步改策略、改滤波、改踝参数还是查几何映射
-
+- ✅ 新的 `t27` 系列诊断日志已采集
+- ✅ `touchdown_summary.csv` 系列产出
+- ✅ 结果文档已完成（见 [results/03_ankle_landing_attitude_resolution.md](../../results/forward_x_failure/03_ankle_landing_attitude_resolution.md)）：
+  - ✅ roll 主导（非脚尖/脚跟 pitch），内外侧接触边缘后续由 `05D` 验证
+  - ✅ roll 为主导轴，pitch 参与低
+  - ✅ 归因完成：`command_not_flat 4 / tracking_lag 2 / coupled_geometry 2`
+  - ✅ 下一步明确：`tracking_lag` → `04`，`coupled_geometry` → `05`

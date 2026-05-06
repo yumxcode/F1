@@ -124,6 +124,19 @@ knee 约：
 
 因为当前 `t3_current` 里的 `current_*` 只能算执行器侧的近似反馈，不是完整的 motor state trajectory。
 
+## 指标字典
+
+| 指标 / 标签 | 含义 | 当前用途 |
+|---|---|---|
+| `action -> target` | policy 输出到 joint target 的估计延迟 | 当前近似 `0 ms`，排除 output 发布链为主瓶颈 |
+| `target -> current` | joint target 到电流响应的估计延迟 | 表示执行器响应存在几十毫秒级延迟 |
+| `current -> pos` | 电流响应到 joint position 的估计延迟 | 表示机构 / 关节位姿兑现明显滞后 |
+| `target -> pos` | joint target 到 joint position 的总响应延迟 | 用于判断执行链总体慢，但不能直接解释 foot-space residual |
+| `ankle_lag_mean_ms` | ankle 关节组的平均延迟 | 与 hip/knee 对比，避免把问题误读成 ankle 独有 |
+| `hip_lag_mean_ms` | hip 关节组的平均延迟 | 作为执行链横向对照 |
+| `knee_lag_mean_ms` | knee 关节组的平均延迟 | 当前日志中 knee 甚至更慢，弱化“ankle 统一太慢”解释 |
+| `execution_想·chain_delay` | target/current/pos 链路中的综合延迟 | 并发放大器，不替代 `05` 的 contact residual |
+
 ## 与后续窗口化分析的统一口径
 
 后续 `07 / 08 / 09` 的结果没有推翻这条延迟链，但把它的作用边界收紧了：

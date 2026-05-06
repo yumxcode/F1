@@ -352,7 +352,7 @@ def main():
     with open(out_md, "w", encoding="utf-8") as handle:
         handle.write("# t27 Phase Lag / Limit Cycle Compare\n\n")
         handle.write("## Summary by case\n\n")
-        handle.write("| case | events | mean |sole_roll| | mean zero crossings | mean dominant period (s) | mean |lpf-pos| loop area | mean |pos-sole| loop area | mean lpf->pos lag (ms) | mean pos->sole lag (ms) | dominant source |\n")
+        handle.write("| case | events | mean_abs_sole_roll | mean zero crossings | mean dominant period (s) | mean_abs_lpf_pos_loop_area | mean_abs_pos_sole_loop_area | mean lpf->pos lag (ms) | mean pos->sole lag (ms) | dominant source |\n")
         handle.write("|---|---:|---:|---:|---:|---:|---:|---:|---|\n")
         for row in summary_rows:
             handle.write(

@@ -1,6 +1,6 @@
 # 09_phase_lag_limit_cycle_compare_t27
 
-状态：`active`
+状态：`done`
 
 ## 目标
 
@@ -29,3 +29,6 @@
 - 能判断是否出现稳定周期震荡
 - 能说明 `sole_roll` 更偏执行链响应，还是更像被 output 直接驱动
 
+## 当前收口
+
+结果见 [09_phase_lag_limit_cycle_compare_t27.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/09_phase_lag_limit_cycle_compare_t27.md:1)。本线已确认：高 `kp` 会放大局部相位滞后和接触抖动表现，但当前没有稳定限环证据；`kp` 更像放大器，不是唯一根因。
