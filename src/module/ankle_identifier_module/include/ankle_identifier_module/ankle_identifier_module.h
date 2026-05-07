@@ -55,6 +55,7 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   bool TryCaptureStableBaseline();
   double DesiredPrimaryVelocity(double local_time) const;
   void PublishHoldCommand();
+  void PublishTargetHoldCommand();
   void PublishStartupPoseHoldCommand();
   void PublishKickCommand();
   std::pair<double, double> GetHoldGains(const std::string& joint_name) const;
@@ -104,6 +105,7 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   int repeat_count_ = 3;
   bool use_imu_ = true;
   bool auto_stop_after_test_ = true;
+  bool hold_target_after_active_ = false;
   TestMode test_mode_ = TestMode::kStep;
   StartupPoseMode startup_pose_mode_ = StartupPoseMode::kZero;
 

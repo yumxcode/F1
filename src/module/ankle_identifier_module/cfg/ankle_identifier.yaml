@@ -13,6 +13,7 @@ pre_hold_sec: 3.0
 active_sec: 1.0
 post_hold_sec: 2.0
 repeat_count: 3
+hold_target_after_active: false
 
 step_amplitude_rad: 0.015
 sine_amplitude_rad: 0.004

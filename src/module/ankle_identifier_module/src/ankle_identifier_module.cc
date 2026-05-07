@@ -131,7 +131,17 @@ bool AnkleIdentifierModule::LoadConfig() {
   startup_gyro_threshold_ = cfg_node["startup_gyro_threshold"].as<double>(0.2);
   use_imu_ = cfg_node["use_imu"].as<bool>(true);
   auto_stop_after_test_ = cfg_node["auto_stop_after_test"].as<bool>(true);
+  hold_target_after_active_ = cfg_node["hold_target_after_active"].as<bool>(false);
   csv_path_ = cfg_node["csv_path"].as<std::string>("ankle_identification.csv");
+
+  if (hold_target_after_active_ && test_mode_ != TestMode::kStep) {
+    AIMRT_ERROR("hold_target_after_active only supports step mode.");
+    return false;
+  }
+  if (hold_target_after_active_ && repeat_count_ != 1) {
+    AIMRT_WARN("hold_target_after_active ignores repeat_count={}, target will be held after the first active window.",
+               repeat_count_);
+  }
 
   return true;
 }
@@ -271,6 +281,21 @@ void AnkleIdentifierModule::OnImu(const std::shared_ptr<const sensor_msgs::msg::
 }
 
 void AnkleIdentifierModule::StepControl(double elapsed_sec) {
+  const double active_end_sec = pre_hold_sec_ + active_sec_;
+  if (hold_target_after_active_) {
+    if (elapsed_sec >= active_end_sec) {
+      PublishTargetHoldCommand();
+      LogSample(elapsed_sec, "hold_target", 1, GetBaseline(primary_joint_) + step_amplitude_rad_,
+                GetBaseline(coupled_joint_));
+      if (auto_stop_after_test_ && !completion_logged_.exchange(true)) {
+        if (csv_.is_open()) csv_.flush();
+        AIMRT_INFO("Target hold engaged. CSV written to {}", csv_path_);
+        test_completed_.store(true);
+      }
+      return;
+    }
+  }
+
   const double cycle_sec = pre_hold_sec_ + active_sec_ + post_hold_sec_;
   const int iteration = static_cast<int>(std::floor(elapsed_sec / cycle_sec));
 
@@ -390,6 +415,19 @@ void AnkleIdentifierModule::PublishHoldCommand() {
     std::lock_guard<std::mutex> lock(data_mutex_);
     if (!baseline_captured_.load()) return;
     cmd = baseline_cmd_;
+  }
+  aimrt::channel::Publish<my_ros2_proto::msg::JointCommand>(joint_cmd_pub_, cmd);
+}
+
+void AnkleIdentifierModule::PublishTargetHoldCommand() {
+  my_ros2_proto::msg::JointCommand cmd;
+  {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    if (!baseline_captured_.load()) return;
+    cmd = baseline_cmd_;
+    SetJointCmd(cmd, primary_joint_, GetBaseline(primary_joint_) + step_amplitude_rad_, 0.0, 0.0,
+                test_kp_, test_kd_);
+    SetJointCmd(cmd, coupled_joint_, GetBaseline(coupled_joint_), 0.0, 0.0, test_kp_, test_kd_);
   }
   aimrt::channel::Publish<my_ros2_proto::msg::JointCommand>(joint_cmd_pub_, cmd);
 }
