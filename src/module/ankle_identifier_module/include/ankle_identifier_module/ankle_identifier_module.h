@@ -100,6 +100,7 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   double leg_hold_kp_ = 300.0;
   double leg_hold_kd_ = 5.0;
   double startup_stable_sec_ = 1.0;
+  double startup_settle_hold_sec_ = 0.0;
   double startup_joint_vel_threshold_ = 0.05;
   double startup_gyro_threshold_ = 0.2;
   double startup_target_pos_threshold_ = 0.03;
@@ -126,6 +127,7 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   my_ros2_proto::msg::JointCommand baseline_cmd_;
   sensor_msgs::msg::Imu latest_imu_;
   std::chrono::steady_clock::time_point start_time_;
+  std::chrono::steady_clock::time_point test_start_time_;
   std::optional<std::chrono::steady_clock::time_point> startup_stable_since_;
   std::ofstream csv_;
 };

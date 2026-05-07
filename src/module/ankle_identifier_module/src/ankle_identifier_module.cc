@@ -128,6 +128,7 @@ bool AnkleIdentifierModule::LoadConfig() {
   leg_hold_kp_ = cfg_node["leg_hold_kp"].as<double>(300.0);
   leg_hold_kd_ = cfg_node["leg_hold_kd"].as<double>(5.0);
   startup_stable_sec_ = cfg_node["startup_stable_sec"].as<double>(1.0);
+  startup_settle_hold_sec_ = cfg_node["startup_settle_hold_sec"].as<double>(0.0);
   startup_joint_vel_threshold_ = cfg_node["startup_joint_vel_threshold"].as<double>(0.05);
   startup_gyro_threshold_ = cfg_node["startup_gyro_threshold"].as<double>(0.2);
   startup_target_pos_threshold_ = cfg_node["startup_target_pos_threshold"].as<double>(0.03);
@@ -242,8 +243,14 @@ void AnkleIdentifierModule::MainLoop() {
       continue;
     }
 
-    const double elapsed =
-        std::chrono::duration<double>(std::chrono::steady_clock::now() - start_time_).count();
+    const auto now = std::chrono::steady_clock::now();
+    if (now < test_start_time_) {
+      PublishStartupPoseHoldCommand();
+      std::this_thread::sleep_until(next_loop_time);
+      continue;
+    }
+
+    const double elapsed = std::chrono::duration<double>(now - test_start_time_).count();
     StepControl(elapsed);
     std::this_thread::sleep_until(next_loop_time);
   }
@@ -418,11 +425,14 @@ bool AnkleIdentifierModule::TryCaptureStableBaseline() {
     baseline_cmd_.position[i] = latest_joint_state_[joint_names_[i]].position;
   }
   start_time_ = now;
+  test_start_time_ = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                               std::chrono::duration<double>(startup_settle_hold_sec_));
   baseline_captured_.store(true);
   AIMRT_INFO(
       "Baseline captured after startup settle. Test joint: {}, coupled joint: {}, "
-      "joint_vel={:.5f}, gyro_norm={:.5f}, target_error={:.5f}",
-      primary_joint_, coupled_joint_, max_joint_vel, gyro_norm, max_target_error);
+      "joint_vel={:.5f}, gyro_norm={:.5f}, target_error={:.5f}, settle_hold_sec={:.3f}",
+      primary_joint_, coupled_joint_, max_joint_vel, gyro_norm, max_target_error,
+      startup_settle_hold_sec_);
   return true;
 }
 
