@@ -381,23 +381,7 @@ bool AnkleIdentifierModule::TryCaptureStableBaseline() {
                 latest_imu_.angular_velocity.z * latest_imu_.angular_velocity.z);
   const bool joint_stable = max_joint_vel <= startup_joint_vel_threshold_;
   const bool imu_stable = !use_imu_ || gyro_norm <= startup_gyro_threshold_;
-  double max_target_error = 0.0;
-  bool target_reached = true;
-  if (startup_pose_mode_ != StartupPoseMode::kCurrent) {
-    for (const auto& joint_name : startup_target_joint_names_) {
-      const auto target_it = startup_target_positions_.find(joint_name);
-      if (target_it == startup_target_positions_.end()) continue;
-      const double target_position = target_it->second;
-      const auto snapshot_it = latest_joint_state_.find(joint_name);
-      if (snapshot_it == latest_joint_state_.end()) continue;
-      const double abs_error = std::abs(snapshot_it->second.position - target_position);
-      max_target_error = std::max(max_target_error, abs_error);
-      if (abs_error > startup_target_pos_threshold_) {
-        target_reached = false;
-      }
-    }
-  }
-  const bool stable_now = joint_stable && imu_stable && target_reached;
+  const bool stable_now = joint_stable && imu_stable;
   const auto now = std::chrono::steady_clock::now();
 
   if (!stable_now) {
@@ -406,10 +390,9 @@ bool AnkleIdentifierModule::TryCaptureStableBaseline() {
     if (unstable_count++ % 1000 == 0) {
       AIMRT_WARN(
           "NOT stable (count={}): joint_vel={:.5f} (thr={:.5f}), gyro_norm={:.5f} (thr={:.5f}), "
-          "target_error={:.5f} (thr={:.5f}), joint_ok={}, imu_ok={}, target_ok={}",
+          "joint_ok={}, imu_ok={}",
           unstable_count, max_joint_vel, startup_joint_vel_threshold_, gyro_norm,
-          startup_gyro_threshold_, max_target_error, startup_target_pos_threshold_, joint_stable,
-          imu_stable, target_reached);
+          startup_gyro_threshold_, joint_stable, imu_stable);
     }
     return false;
   }
@@ -418,8 +401,8 @@ bool AnkleIdentifierModule::TryCaptureStableBaseline() {
     startup_stable_since_ = now;
     AIMRT_INFO(
         "Startup settle entered. Waiting {:.3f}s stable window before baseline capture. "
-        "joint_vel={:.5f}, gyro_norm={:.5f}, target_error={:.5f}",
-        startup_stable_sec_, max_joint_vel, gyro_norm, max_target_error);
+        "joint_vel={:.5f}, gyro_norm={:.5f}",
+        startup_stable_sec_, max_joint_vel, gyro_norm);
     return false;
   }
 
@@ -436,8 +419,8 @@ bool AnkleIdentifierModule::TryCaptureStableBaseline() {
   baseline_captured_.store(true);
   AIMRT_INFO(
       "Baseline captured after startup settle. Test joint: {}, coupled joint: {}, "
-      "joint_vel={:.5f}, gyro_norm={:.5f}, target_error={:.5f}, settle_hold_sec={:.3f}",
-      primary_joint_, coupled_joint_, max_joint_vel, gyro_norm, max_target_error,
+      "joint_vel={:.5f}, gyro_norm={:.5f}, settle_hold_sec={:.3f}",
+      primary_joint_, coupled_joint_, max_joint_vel, gyro_norm,
       startup_settle_hold_sec_);
   return true;
 }
