@@ -28,6 +28,7 @@ TOUCHDOWN_PRE_SEC = 0.05
 TOUCHDOWN_POST_SEC = 0.10
 MAX_LAG_SEC = 0.20
 MIN_SAMPLE_POINTS = 10
+JOINT_SOLE_MIN_CORR = 0.20
 
 
 def load_module(module_name: str, path: str):
@@ -77,6 +78,16 @@ def mean(values):
     if not valid:
         return math.nan
     return sum(valid) / len(valid)
+
+
+def median(values):
+    valid = sorted(v for v in values if isinstance(v, (int, float)) and not math.isnan(v))
+    if not valid:
+        return math.nan
+    mid = len(valid) // 2
+    if len(valid) % 2 == 1:
+        return valid[mid]
+    return 0.5 * (valid[mid - 1] + valid[mid])
 
 
 def stddev(values):
@@ -184,6 +195,14 @@ def classify_window(rows, event, window_name):
     state_joint_left_ms = state_joint_left[0] * dt * 1000.0 if not math.isnan(state_joint_left[0]) else math.nan
     state_joint_right_ms = state_joint_right[0] * dt * 1000.0 if not math.isnan(state_joint_right[0]) else math.nan
     joint_sole_ms = joint_sole[0] * dt * 1000.0 if not math.isnan(joint_sole[0]) else math.nan
+    joint_sole_corr = joint_sole[1]
+    joint_sole_ms_filtered = (
+        joint_sole_ms
+        if not math.isnan(joint_sole_ms)
+        and not math.isnan(joint_sole_corr)
+        and joint_sole_corr >= JOINT_SOLE_MIN_CORR
+        else math.nan
+    )
 
     return {
         "window": window_name,
@@ -200,8 +219,12 @@ def classify_window(rows, event, window_name):
         "state_joint_right_lag_ms": state_joint_right_ms,
         "state_joint_right_corr": state_joint_right[1],
         "state_joint_mean_lag_ms": mean([state_joint_left_ms, state_joint_right_ms]),
-        "joint_sole_lag_ms": joint_sole_ms,
-        "joint_sole_corr": joint_sole[1],
+        "joint_sole_lag_ms_raw": joint_sole_ms,
+        "joint_sole_lag_ms": joint_sole_ms_filtered,
+        "joint_sole_corr": joint_sole_corr,
+        "joint_sole_pass_corr_gate": int(
+            not math.isnan(joint_sole_ms_filtered)
+        ),
         "mean_abs_sole_roll": mean([abs(v) for v in sole_roll]),
     }
 
@@ -255,7 +278,10 @@ def main():
                 "mean_state_joint_left_lag_ms": mean([r["state_joint_left_lag_ms"] for r in items]),
                 "mean_state_joint_right_lag_ms": mean([r["state_joint_right_lag_ms"] for r in items]),
                 "mean_state_joint_lag_ms": mean([r["state_joint_mean_lag_ms"] for r in items]),
+                "mean_joint_sole_lag_ms_raw": mean([r["joint_sole_lag_ms_raw"] for r in items]),
                 "mean_joint_sole_lag_ms": mean([r["joint_sole_lag_ms"] for r in items]),
+                "median_joint_sole_lag_ms": median([r["joint_sole_lag_ms"] for r in items]),
+                "joint_sole_valid_events": sum(r["joint_sole_pass_corr_gate"] for r in items),
                 "mean_cmd_state_left_lag_ms": mean([r["cmd_state_left_lag_ms"] for r in items]),
                 "mean_cmd_state_right_lag_ms": mean([r["cmd_state_right_lag_ms"] for r in items]),
                 "mean_abs_sole_roll": mean([r["mean_abs_sole_roll"] for r in items]),
@@ -286,14 +312,15 @@ def main():
         handle.write(f"- Source diag csv: `{os.path.basename(diag_path)}`\n")
         handle.write("- Scope: first 4 touchdown events only.\n")
         handle.write("- Windows: `swing = touchdown-350ms .. touchdown-20ms`, `touchdown = touchdown-50ms .. touchdown+100ms`.\n\n")
+        handle.write(f"- `joint->sole` quality gate: keep events with `joint_sole_corr >= {JOINT_SOLE_MIN_CORR:.2f}` in the filtered summary.\n\n")
 
         handle.write("## Window Summary\n\n")
-        handle.write("| window | events | mean left state->joint lag (ms) | mean right state->joint lag (ms) | mean state->joint lag (ms) | mean joint->sole lag (ms) | mean left cmd->state lag (ms) | mean right cmd->state lag (ms) | mean_abs_sole_roll |\n")
-        handle.write("|---|---:|---:|---:|---:|---:|---:|---:|---:|\n")
+        handle.write("| window | events | joint->sole valid | mean left state->joint lag (ms) | mean right state->joint lag (ms) | mean state->joint lag (ms) | mean joint->sole lag raw (ms) | mean joint->sole lag filtered (ms) | median joint->sole lag filtered (ms) | mean left cmd->state lag (ms) | mean right cmd->state lag (ms) | mean_abs_sole_roll |\n")
+        handle.write("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
         for row in summary_rows:
             handle.write(
-                f"| {row['window']} | {int(row['events'])} | {fmt(row['mean_state_joint_left_lag_ms'])} | {fmt(row['mean_state_joint_right_lag_ms'])} | "
-                f"{fmt(row['mean_state_joint_lag_ms'])} | {fmt(row['mean_joint_sole_lag_ms'])} | "
+                f"| {row['window']} | {int(row['events'])} | {int(row['joint_sole_valid_events'])} | {fmt(row['mean_state_joint_left_lag_ms'])} | {fmt(row['mean_state_joint_right_lag_ms'])} | "
+                f"{fmt(row['mean_state_joint_lag_ms'])} | {fmt(row['mean_joint_sole_lag_ms_raw'])} | {fmt(row['mean_joint_sole_lag_ms'])} | {fmt(row['median_joint_sole_lag_ms'])} | "
                 f"{fmt(row['mean_cmd_state_left_lag_ms'])} | {fmt(row['mean_cmd_state_right_lag_ms'])} | {fmt(row['mean_abs_sole_roll'])} |\n"
             )
 
@@ -304,18 +331,19 @@ def main():
         handle.write(f"| joint->sole lag delta | {fmt(delta_joint_sole)} |\n")
 
         handle.write("\n## Event Table\n\n")
-        handle.write("| window | side | t_touch(s) | left cmd->state (ms) | right cmd->state (ms) | left state->joint (ms) | right state->joint (ms) | mean state->joint (ms) | joint->sole (ms) |\n")
-        handle.write("|---|---|---:|---:|---:|---:|---:|---:|---:|\n")
+        handle.write("| window | side | t_touch(s) | left cmd->state (ms) | right cmd->state (ms) | left state->joint (ms) | right state->joint (ms) | mean state->joint (ms) | joint->sole raw (ms) | joint->sole corr | joint->sole filtered (ms) |\n")
+        handle.write("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
         for row in event_rows:
             handle.write(
                 f"| {row['window']} | {row['side']} | {fmt(row['touchdown_time_sec'], 3)} | {fmt(row['cmd_state_left_lag_ms'])} | "
                 f"{fmt(row['cmd_state_right_lag_ms'])} | {fmt(row['state_joint_left_lag_ms'])} | {fmt(row['state_joint_right_lag_ms'])} | "
-                f"{fmt(row['state_joint_mean_lag_ms'])} | {fmt(row['joint_sole_lag_ms'])} |\n"
+                f"{fmt(row['state_joint_mean_lag_ms'])} | {fmt(row['joint_sole_lag_ms_raw'])} | {fmt(row['joint_sole_corr'])} | {fmt(row['joint_sole_lag_ms'])} |\n"
             )
 
         handle.write("\n## Interpretation\n\n")
         handle.write("- If `cmd->state` stays near zero in both windows, the main lag is not in command acceptance.\n")
         handle.write("- If `state->joint` is already large in `swing`, the lag is pre-contact and not only a touchdown effect.\n")
+        handle.write("- `joint->sole` is reported in both raw and corr-gated form because short touchdown windows can produce unstable edge-hitting lag estimates when `joint_sole_corr` is weak.\n")
         handle.write("- If `state->joint` grows further in `touchdown`, contact is amplifying the execution-chain lag.\n")
         handle.write("- Left/right asymmetry should be judged from `left/right state->joint lag`, not from `cmd->state`.\n")
 

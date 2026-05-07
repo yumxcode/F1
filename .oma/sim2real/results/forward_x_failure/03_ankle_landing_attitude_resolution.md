@@ -1,5 +1,9 @@
 # Round 3A 踝落地姿态专项结果
 
+> Audit note (2026-05-06): this document was built on the old `8/8 severe_foot_flat_touchdown` premise.  
+> After baseline-correcting the FK foot frame, the updated real-data read is `pitch 6/8, roll 2/8` with root counts `coupled_geometry 3 / command_not_flat 3 / tracking_lag 1 / residual_not_large_enough 1`; see [16_real_round3_logic_audit_after_sim_contrast.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/16_real_round3_logic_audit_after_sim_contrast.md:1).
+> Current consistency audit: [22_forward_x_failure_consistency_audit.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/22_forward_x_failure_consistency_audit.md:1). Do not use the old `8/8 roll dominant` or `command_not_flat 4` statements as current repair entry criteria.
+
 轮次目标：在 [02_round3_landing_window_diagnosis.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/02_round3_landing_window_diagnosis.md:1) 已确认 `8/8 = severe_foot_flat_touchdown` 的基础上，进一步回答：
 
 1. touchdown 不平主要由 `pitch` 还是 `roll` 主导  
@@ -280,17 +284,17 @@
 3. 经 [04_tracking_lag_repair.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/04_tracking_lag_repair.md:1) 的后续试验验证，当前统一口径应进一步收紧为：
    - `tracking_lag` 线有证据，但单靠 `right_ankle_roll_joint` 单轴 `kp/kd` 扫参不能形成稳定修复路径
    - 单轴调参会在 `tracking_lag / filter_delay / coupled_geometry / command_not_flat` 之间转移表现
-   - 因此当前最合理的修复优先级已调整为：
+   - 因此 pre-audit 修复优先级曾调整为：
      1. `command_not_flat`
      2. `coupled_geometry`
      3. `filter_delay`
      4. `tracking_lag` 只作为并发问题复核，而不再单独作为第一修复入口
 
-## 下一步动作（进度标记）
+## 下一步动作（pre-audit 历史进度，已被审计降级）
 
-1. ✅ `command_not_flat` 主线 — 已在 `04/05` 中持续排查；`05C` 最终确认不是唯一根因，touchdown 残差归到 foot-space / contact frame
+1. ✅ `command_not_flat` 主线 — 历史上已在 `04/05` 中持续排查；审计后不再作为当前第一修复入口
 
-2. ✅ `coupled_geometry` 主线 — 已在 `05` 专项中深挖，`05A/05B/05C` 均已完成；当前收口为 `fk_foot_frame_residual_candidate 3/4`；⬜ 等待 `05D` 现场验证
+2. ✅ `coupled_geometry` 主线 — 历史上已在 `05` 专项中深挖；旧 `fk_foot_frame_residual_candidate 3/4` 强收口已降级；当前只保留 `05D` 现场验证
 
 3. ⬜ `filter_delay` 复核线 — **未正式完成**
    - `40/0.8` 下出现过 `filter_delay` 1 个样本，但后续多组试验中均未稳定复现
@@ -304,7 +308,7 @@
 | 指标 / 标签 | 含义 | 当前用途 |
 |---|---|---|
 | `sole_pitch_touch_rad` | touchdown 时脚底 pitch 姿态 | 与 roll 对比，判断 touchdown 主导轴 |
-| `sole_roll_touch_rad` | touchdown 时脚底 roll 姿态 | 当前 `8/8` roll 主导的核心依据 |
+| `sole_roll_touch_rad` | touchdown 时脚底 roll 姿态 | pre-audit `8/8 roll` 的核心依据；审计后不再作为当前真值 |
 | `ankle_pitch_err_touch_rad` | touchdown 时 ankle pitch 目标 / 实际误差 | 判断 pitch 轴是否为跟踪主因 |
 | `ankle_roll_err_touch_rad` | touchdown 时 ankle roll 目标 / 实际误差 | 判断 roll 轴是否存在 tracking lag |
 | `command_not_flat` | 目标本身不足以把脚底调平 | 三层根因之一；后续不能单独解释全部 residual |
@@ -312,11 +316,11 @@
 | `filter_delay` | raw 目标早于 LPF 目标，导致调平动作迟到 | 当前无稳定主导证据 |
 | `coupled_geometry` | joint-space 角度不能充分解释 foot-space 姿态 | 后续收紧为 touchdown foot-space / contact residual |
 | `effective_delay_to_touch_tracking_err_rad` | 经过延迟补偿后 touchdown 相关的跟踪误差 | 对 tracking_lag 样本做排序，不直接替代主因分类 |
-| `root_cause_distribution` | 三层根因分类计数 | 当前统一为 `command_not_flat 4 / tracking_lag 2 / coupled_geometry 2` |
+| `root_cause_distribution` | 三层根因分类计数 | pre-audit 为 `command_not_flat 4 / tracking_lag 2 / coupled_geometry 2`；审计后以 `16/22` 为准 |
 
 ## 阻塞状态
 
 - `Round 4 low_speed_walk_validation_candidate`: `blocked`
 - 原因：
-  - `severe_foot_flat_touchdown` 仍未关闭
-  - `roll` 主导 touchdown 不平问题已明确，但还未进入针对性修复验证
+  - `05D FK Foot-Frame / Contact` 尚未完成
+  - real touchdown residual 的真实 foot/contact 物理来源尚未钉死

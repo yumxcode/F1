@@ -33,6 +33,7 @@ TRACKING_LAG_ERR_RAD = 0.20
 MIN_EFFECTIVE_TAU = 0.50
 FILTER_RATIO_DELAY = 0.55
 AXIS_COUPLING_MIN_RAD = 0.20
+MIN_FOOT_FRAME_RESIDUAL_FOR_CAUSE_RAD = 0.15
 CHECKPOINTS = (
     ("minus_100ms", -0.10),
     ("minus_50ms", -0.05),
@@ -312,6 +313,7 @@ def add_checkpoint_fields(row, diag_rows):
 
 
 def classify_three_layer_cause(row):
+    foot_frame_residual = row["foot_flat_error_touch_rad"]
     intent_ratio = row["raw_flattening_intent_ratio"]
     delayed_flatten = row["effective_delay_raw_flattening_intent"]
     delayed_raw = abs(row["effective_delay_raw_rad"])
@@ -319,9 +321,12 @@ def classify_three_layer_cause(row):
     delayed_tracking_err = row["effective_delay_to_touch_tracking_err_rad"]
     coupling_score = row["axis_coupling_score_rad"]
 
-    if delayed_flatten == 0 or (intent_ratio <= 0.25 and delayed_raw >= RAW_NOT_FLAT_TOUCH_RAD):
+    if foot_frame_residual < MIN_FOOT_FRAME_RESIDUAL_FOR_CAUSE_RAD:
+        root_cause = "residual_not_large_enough"
+        rationale = "baseline-corrected foot-frame residual is small, so touchdown-side three-layer cause is not treated as a blocker"
+    elif delayed_flatten == 0 or (intent_ratio <= 0.25 and delayed_raw >= RAW_NOT_FLAT_TOUCH_RAD):
         root_cause = "command_not_flat"
-        rationale = "with 20 ms actuation delay compensation, raw intent still does not move ankle toward flatter touchdown"
+        rationale = "with 20 ms actuation delay compensation, raw intent still does not move the dominant ankle joint toward reducing the baseline-corrected foot-frame residual"
     elif not math.isnan(delayed_tau_ratio) and delayed_tau_ratio < FILTER_RATIO_DELAY:
         root_cause = "filter_delay"
         rationale = "with 20 ms delay compensation, lpf torque path is still attenuated before touchdown response should arrive"
@@ -398,6 +403,7 @@ def write_summary(path: str, source_path: str, diag_path: str, rows, ranked_flat
         handle.write(f"- Source touchdown summary: `{source_path}`\n")
         handle.write(f"- Source diag csv: `{diag_path}`\n")
         handle.write(f"- Touchdowns classified: `{len(rows)}`\n")
+        handle.write(f"- Minimum residual for blocker-style root cause: `{MIN_FOOT_FRAME_RESIDUAL_FOR_CAUSE_RAD:.2f} rad`\n")
         handle.write(f"- Attitude dominant axis counts: `{dict(axis_counts)}`\n")
         handle.write(f"- Touchdown type counts: `{dict(type_counts)}`\n")
         handle.write(f"- Ankle tracking dominant axis counts: `{dict(tracking_counts)}`\n")
@@ -406,6 +412,7 @@ def write_summary(path: str, source_path: str, diag_path: str, rows, ranked_flat
         handle.write(f"- Delay-sweep stable touch-downs: `{stable_count}/{len(rows)}`\n\n")
 
         handle.write("## Interpretation Rules\n\n")
+        handle.write("- `foot_flat_error_touch_rad` / `sole_pitch_touch_rad` / `sole_roll_touch_rad` are baseline-corrected foot-frame residuals, not raw link orientation.\n")
         handle.write("- `raw` = `pos_des_raw_*`, interpreted as ankle touchdown correction intent.\n")
         handle.write("- `lpf` = `tau_des_lpf_*`, because current ankle joints are parallel joints and the filtered execution path is torque-domain.\n")
         handle.write("- `q` = actual joint position `pos_*`.\n")

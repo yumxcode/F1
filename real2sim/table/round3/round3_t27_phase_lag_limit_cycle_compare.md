@@ -2,13 +2,13 @@
 
 ## Summary by case
 
-| case | events | mean |sole_roll| | mean zero crossings | mean dominant period (s) | mean |lpf-pos| loop area | mean |pos-sole| loop area | mean lpf->pos lag (ms) | mean pos->sole lag (ms) | dominant source |
+| case | events | mean_abs_sole_roll | mean zero crossings | mean dominant period (s) | mean_abs_lpf_pos_loop_area | mean_abs_pos_sole_loop_area | mean lpf->pos lag (ms) | mean pos->sole lag (ms) | dominant source |
 |---|---:|---:|---:|---:|---:|---:|---:|---|
-| 35/0.5 baseline | 4 | 1.6941 | 0.0000 | nan | nan | 0.0053 | 133.0428 | 0.0000 | execution_chain_dominant |
-| 50/0.8 right_roll | 4 | 1.7233 | 0.0000 | nan | nan | 0.0339 | 136.5278 | 18.5122 | execution_chain_dominant |
-| 40/0.8 right_roll | 4 | 1.6043 | 0.0000 | nan | nan | 0.0528 | 134.4351 | 71.8532 | output_chain_dominant |
-| 25/0.5 right_roll | 4 | 1.5744 | 0.0000 | nan | nan | 0.0006 | 141.8291 | 9.1503 | execution_chain_dominant |
-| 25/0.5 all_ankles | 4 | 1.6298 | 0.0000 | nan | nan | 0.0060 | 143.7665 | 16.4978 | execution_chain_dominant |
+| 35/0.5 baseline | 4 | 0.0622 | 1.7500 | nan | nan | 0.0100 | 135.2978 | 15.7847 | execution_chain_dominant |
+| 50/0.8 right_roll | 4 | 0.0624 | 2.0000 | nan | nan | 0.0176 | 138.8419 | 46.2806 | execution_chain_dominant |
+| 40/0.8 right_roll | 4 | 0.0738 | 1.0000 | nan | nan | 0.0198 | 141.3886 | 50.9926 | execution_chain_dominant |
+| 25/0.5 right_roll | 4 | 0.0588 | 1.0000 | nan | nan | 0.0106 | 134.9664 | 9.1503 | execution_chain_dominant |
+| 25/0.5 all_ankles | 4 | 0.0599 | 1.5000 | nan | nan | 0.0033 | 141.4096 | 9.4273 | execution_chain_dominant |
 
 ## Interpretation
 

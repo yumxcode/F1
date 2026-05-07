@@ -1,5 +1,9 @@
 # Round 3 摆腿清高与落地窗口联合诊断结果
 
+> Audit note (2026-05-06): this document used the pre-audit raw FK foot-frame definition.  
+> The old statements `8/8 severe_foot_flat_touchdown` and `mean foot-flat error ≈ 1.6766 rad` are superseded by the calibrated rerun in [16_real_round3_logic_audit_after_sim_contrast.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/16_real_round3_logic_audit_after_sim_contrast.md:1).
+> Current consistency audit: [22_forward_x_failure_consistency_audit.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/22_forward_x_failure_consistency_audit.md:1). Treat this file as historical pre-audit evidence only.
+
 轮次目标：基于 `t26_round3_diag` 真机日志与回放分析，判断前向推进失败时的主导阻塞项是否来自摆腿清高不足、髋膝时序/跟踪问题，还是 touchdown 时脚板姿态控制失败。
 
 ## 数据源

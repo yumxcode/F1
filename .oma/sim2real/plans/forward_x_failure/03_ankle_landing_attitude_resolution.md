@@ -1,6 +1,8 @@
 # Round 3A 踝落地姿态专项问题解决方案
 
-状态：`done`。本专项由 [02_round3_landing_window_diagnosis.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/02_round3_landing_window_diagnosis.md:1) 直接触发。当前结论已沉淀为：touchdown 姿态 `8/8` roll 主导，三层根因分布为 `command_not_flat 4 / tracking_lag 2 / coupled_geometry 2`；后续 `04/05/06-13` 已进一步把 `tracking_lag` 收为执行链问题，把 `coupled_geometry` 收为 touchdown foot-space / contact residual。
+状态：`done / superseded-by-audit`。本专项由 [02_round3_landing_window_diagnosis.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/02_round3_landing_window_diagnosis.md:1) 直接触发，是 pre-audit 的踝落地姿态分类计划。
+
+2026-05-06 审计后，旧结论 `touchdown 姿态 8/8 roll 主导，command_not_flat 4 / tracking_lag 2 / coupled_geometry 2` 不再作为当前修复入口。校准后 real `03` 应读作 `pitch 6/8, roll 2/8`，root counts 为 `coupled_geometry 3 / command_not_flat 3 / tracking_lag 1 / residual_not_large_enough 1`；sim 旧 `command_not_flat` 判因也已因视频事实和 frame 偏置复审而降级。当前有效口径见 [16_real_round3_logic_audit_after_sim_contrast.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/16_real_round3_logic_audit_after_sim_contrast.md:1)、[17_sim_round3_reaudit_with_video_fact.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/17_sim_round3_reaudit_with_video_fact.md:1) 和 [22_forward_x_failure_consistency_audit.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/22_forward_x_failure_consistency_audit.md:1)。
 
 统一进展和指标口径见 [00_forward_x_failure_progress_review.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/00_forward_x_failure_progress_review.md:1)。
 
@@ -15,7 +17,7 @@
 
 只有当主导根因被明确并至少完成一轮针对性修复后，才允许回到低速前进验证。
 
-## 当前已知事实
+## 当前已知事实（历史口径，已降级）
 
 来自 [02_round3_landing_window_diagnosis.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/02_round3_landing_window_diagnosis.md:1)：
 
@@ -27,9 +29,9 @@
 
 解释：
 
-- 摆腿中期不是完全抬不起来
-- 但 touchdown 时脚板姿态严重不平，已经成为更上游的阻塞项
-- clearance 与髋膝问题保留，但当前不作为第一主线
+- 摆腿中期不是完全抬不起来，这条仍可保留。
+- 旧 `foot_flat_error` 量级和 `roll 主导` 结论受到 raw FK foot-frame 偏置污染，不能再直接当真实脚底接触证据。
+- clearance 与髋膝问题保留为并发问题，但当前不作为第一主线。
 
 ## 专项根因假设
 
@@ -73,10 +75,10 @@ raw 目标方向正确，但 `pos_des_lpf` 或实际下发命令到达过晚，�
 - 但 `foot_flat_error` 很大
 - 往往伴随左右脚、内外侧、脚尖脚跟接触模式不一致
 
-## 执行结论（已完成 ✅）
+## 执行结论（pre-audit 历史记录）
 
 > 本专项已全部完成。Phase A/B/C 均已执行，结果见 [results/03_ankle_landing_attitude_resolution.md](../../results/forward_x_failure/03_ankle_landing_attitude_resolution.md)。
-> **核心结论**：`8/8` roll 主导；三层根因为 `command_not_flat 4 / tracking_lag 2 / coupled_geometry 2`；后续 `04` 处理 `tracking_lag`，`05` 处理 `coupled_geometry`，`filter_delay` 无稳定主导证据。
+> **历史核心结论**：`8/8` roll 主导；三层根因为 `command_not_flat 4 / tracking_lag 2 / coupled_geometry 2`。该结论已被 2026-05-06 审计降级，后续引用必须优先使用 `16/17/18/21/22`。
 
 ## 解决策略
 
@@ -229,8 +231,8 @@ raw 目标方向正确，但 `pos_des_lpf` 或实际下发命令到达过晚，�
 
 以下条件当前仍满足，Round 4 继续阻塞：
 
-- ❌ `severe_foot_flat_touchdown` 仍为主导判因（`05C` 收口为 `fk_foot_frame_residual_candidate`，`05D` 待执行）
-- ❌ touchdown 仍系统性斜脚板落地
+- ❌ `05D FK Foot-Frame / Contact` 尚未验证 FK `sole` 指标是否代表真实脚底接触平面
+- ❌ real touchdown residual 相对 sim 可接受包络仍超限，且执行链 residual / 抖动放大尚未分离成可修复项
 
 ## 产物要求（已完成）
 

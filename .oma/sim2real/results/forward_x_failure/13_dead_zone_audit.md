@@ -12,7 +12,7 @@
 
 - `swing = touchdown - 350 ms .. touchdown - 20 ms`
 
-只取每个日志前 `4` 个 `right touchdown` 事件。
+只取每个日志前 `4` 个 `right touchdown` 事件，事件源改为当前 `ROUND3A.detect_touchdowns()`，不再使用旧 `right_contact: 0 -> 1` proxy。
 
 ## 统计结果
 
@@ -20,26 +20,26 @@
 
 | case | csv | events | mean pos_des_raw | mean_abs_pos_des_raw | mean small-signal ratio | min_abs_pos_des_raw | max_abs_pos_des_raw |
 |---|---|---:|---:|---:|---:|---:|---:|
-| 35/0.5 retest_copy | t27_tracking_lag_b1_diag_20260428_152240.csv | 3 | 0.0878 | 0.0878 | 0.5722 | 0.0247 | 0.1923 |
-| 50/0.8 right_roll | t27_tracking_lag_b1_diag_20260428_161322.csv | 3 | -0.1054 | 0.1722 | 0.3619 | 0.0269 | 0.4555 |
-| 40/0.8 right_roll | t27_tracking_lag_b1_diag_20260428_162312.csv | 3 | -0.1177 | 0.1742 | 0.4632 | 0.0207 | 0.3991 |
-| 25/0.5 right_roll | t27_tracking_lag_b1_diag_20260428_163825.csv | 3 | -0.0850 | 0.1247 | 0.6429 | 0.0011 | 0.4307 |
-| 25/0.5 all_ankles | t27_tracking_lag_b1_diag_20260428_164817.csv | 3 | -0.0577 | 0.1193 | 0.5685 | 0.0003 | 0.3813 |
-| 25/0.5 all_ankles actuator | t27_tracking_lag_b1_diag_20260429_161248.csv | 3 | -0.0535 | 0.1069 | 0.7016 | 0.0016 | 0.3791 |
-| 25/0.4 all_ankles | t27_tracking_lag_b1_diag_20260430_100024.csv | 3 | -0.0167 | 0.0816 | 0.8119 | 0.0039 | 0.4335 |
-| 30/0.4 all_ankles | t27_tracking_lag_b1_diag_20260430_100314.csv | 3 | -0.0733 | 0.0937 | 0.7951 | 0.0010 | 0.4993 |
-| 35/0.5 all_ankles | t27_tracking_lag_b1_diag_20260430_100705.csv | 3 | -0.0018 | 0.0779 | 0.7895 | 0.0006 | 0.4359 |
-| 40/0.8 all_ankles | t27_tracking_lag_b1_diag_20260430_101404.csv | 3 | -0.0933 | 0.1434 | 0.5672 | 0.0047 | 0.4392 |
+| 35/0.5 retest_copy | t27_tracking_lag_b1_diag_20260428_152240.csv | 4 | 0.0226 | 0.0397 | 0.9167 | 0.0001 | 0.1923 |
+| 50/0.8 right_roll | t27_tracking_lag_b1_diag_20260428_161322.csv | 4 | 0.0218 | 0.0361 | 0.9626 | 0.0000 | 0.3005 |
+| 40/0.8 right_roll | t27_tracking_lag_b1_diag_20260428_162312.csv | 4 | 0.0023 | 0.0436 | 0.9320 | 0.0000 | 0.3608 |
+| 25/0.5 right_roll | t27_tracking_lag_b1_diag_20260428_163825.csv | 4 | 0.0034 | 0.0386 | 0.9396 | 0.0005 | 0.3917 |
+| 25/0.5 all_ankles | t27_tracking_lag_b1_diag_20260428_164817.csv | 4 | -0.0027 | 0.0529 | 0.9026 | 0.0005 | 0.5990 |
+| 25/0.5 all_ankles actuator | t27_tracking_lag_b1_diag_20260429_161248.csv | 4 | -0.0248 | 0.0724 | 0.7749 | 0.0011 | 0.3441 |
+| 25/0.4 all_ankles | t27_tracking_lag_b1_diag_20260430_100024.csv | 4 | 0.0241 | 0.0466 | 0.9394 | 0.0002 | 0.2078 |
+| 30/0.4 all_ankles | t27_tracking_lag_b1_diag_20260430_100314.csv | 4 | 0.0128 | 0.0427 | 0.9240 | 0.0022 | 0.2059 |
+| 35/0.5 all_ankles | t27_tracking_lag_b1_diag_20260430_100705.csv | 3 | 0.0149 | 0.0694 | 0.8491 | 0.0001 | 0.4410 |
+| 40/0.8 all_ankles | t27_tracking_lag_b1_diag_20260430_101404.csv | 4 | -0.0035 | 0.0365 | 0.9302 | 0.0008 | 0.2717 |
 
 ### 0.05 粒度分箱
 
-`|pos_des_raw|` 的 0.05 分箱进一步说明，`swing` 期的小信号主要集中在 `0.00 ~ 0.10 rad`，而且不同 kp case 之间只是把分布往更大区间推开一点，并没有改变“swing 期本身就是小幅输出主导”的事实。
+`|pos_des_raw|` 的 0.05 分箱进一步说明，`swing` 期的小信号主要集中在 `0.00 ~ 0.10 rad`，而且这一结论在新 touchdown detector 下更强了：大多数 case 的样本主峰都落在 `0.00 ~ 0.05 rad`。
 
 典型现象：
 
-- `25/0.4`、`30/0.4`、`35/0.5` 的 `0.00 ~ 0.10 rad` 占比最高，说明小信号兑现最强。
-- `50/0.8`、`40/0.8` 虽然会把一部分样本推到 `0.10 ~ 0.20 rad` 甚至更高，但 `0.00 ~ 0.10 rad` 仍然占有相当比例，不是完全离开死区区间。
-- `25/0.5 all_ankles actuator` 的 `0.00 ~ 0.10 rad` 占比更高，说明把四个 ankle 一起调软后，swing 期更集中在低幅值、小信号区间，稳定性更强，但推进也更弱。
+- `25/0.4`、`30/0.4`、`35/0.5 retest_copy`、`40/0.8 all_ankles` 的 `0.00 ~ 0.10 rad` 占比都接近或超过 `90%`。
+- `50/0.8 right_roll` 在旧触地口径下曾看起来更像“大输出”，但新 detector 对齐后，`0.00 ~ 0.10 rad` 也达到 `96%`，不再支持“已明显脱离小信号区”的旧读法。
+- `25/0.5 all_ankles actuator` 仍是当前表里相对“更大输出”的 case，但 `0.00 ~ 0.10 rad` 也还有 `77%`，仍属于小信号主导。
 
 #### 目标区间三段表
 
@@ -51,18 +51,16 @@
 
 | case | 0.00 ~ 0.05 | 0.05 ~ 0.10 | > 0.10 | samples |
 |---|---:|---:|---:|---:|
-| `25/0.4 all_ankles` | `40.2%` | `40.2%` | `19.5%` | `82` |
-| `30/0.4 all_ankles` | `64.0%` | `12.0%` | `24.0%` | `75` |
-| `35/0.5 all_ankles` | `49.4%` | `27.6%` | `23.0%` | `87` |
-| `40/0.8 all_ankles` | `40.0%` | `18.8%` | `41.3%` | `80` |
-| `50/0.8 right_roll` | `9.6%` | `24.7%` | `65.8%` | `73` |
+| `25/0.4 all_ankles` | `64.1%` | `29.8%` | `6.1%` | `131` |
+| `30/0.4 all_ankles` | `77.7%` | `14.6%` | `7.7%` | `130` |
+| `35/0.5 all_ankles` | `56.0%` | `29.0%` | `15.0%` | `100` |
+| `40/0.8 all_ankles` | `81.5%` | `11.5%` | `6.9%` | `130` |
+| `50/0.8 right_roll` | `82.7%` | `13.5%` | `3.8%` | `133` |
 
 这个表的直接含义是：
 
-- `30/0.4` 的 `swing` 期最集中在 `0.00 ~ 0.05 rad`，也就是最小信号区。
-- `35/0.5`、`25/0.4` 仍然有很高比例落在 `0.10 rad` 以下，说明 swing 期还是明显偏小。
-- `40/0.8` 和 `50/0.8` 明显把分布往更大幅值段推开了，但它们并没有完全摆脱 `0.00 ~ 0.10 rad` 区间。
-- `50/0.8` 最明显地把 swing 输出推到了 `> 0.10 rad`，但这并不自动意味着更健康，只说明它更少停留在小信号区。
+- `40/0.8`、`50/0.8` 在新 detector 下都回到以 `0.00 ~ 0.05 rad` 为主，不再支持“高 kp case swing 已脱离 dead-zone 主导”的旧结论。
+- `35/0.5 all_ankles` 仍然是这组里相对更大的一个，但绝大多数样本依旧落在 `0.10 rad` 以下。
 
 #### case-level swing 判读
 
@@ -70,11 +68,11 @@
 
 | case | swing 判读 |
 |---|---|
+| `25/0.4 all_ankles` | `dead_zone_dominant` |
 | `30/0.4 all_ankles` | `dead_zone_dominant` |
-| `25/0.4 all_ankles` | `mixed_dead_zone_and_realization`，偏死区 |
 | `35/0.5 all_ankles` | `mixed_dead_zone_and_realization`，偏死区 |
-| `40/0.8 all_ankles` | `mixed_dead_zone_and_realization` |
-| `50/0.8 right_roll` | `realization_dominant`，死区不是主导 |
+| `40/0.8 all_ankles` | `dead_zone_dominant` |
+| `50/0.8 right_roll` | `dead_zone_dominant` |
 
 这张表的作用不是给最终物理真因盖章，而是告诉后续分析：
 
@@ -85,12 +83,12 @@
 
 这批数据支持下面这条更收敛的解释：
 
-1. **`swing` 窗里，`right_ankle_roll` 的 `pos_des_raw` 确实偏小。**  
-   各 case 的 `mean_abs_pos_des_raw` 大致在 `0.0779 ~ 0.1742 rad`，不少窗口里 `abs(pos_des_raw) <= 0.10 rad` 的占比仍然很高。
+1. **`swing` 窗里，`right_ankle_roll` 的 `pos_des_raw` 在新 detector 下更偏小。**  
+   各 case 的 `mean_abs_pos_des_raw` 大致在 `0.0361 ~ 0.0724 rad`，`abs(pos_des_raw) <= 0.10 rad` 的占比大多在 `0.85 ~ 0.96`。
 
 2. **这个小信号特征是稳定存在的，不是只在低 kp case 才出现。**  
-   `25/0.4`、`30/0.4`、`35/0.5` 之外，`40/0.8`、`50/0.8` 也都有明显的小幅 `pos_des_raw` 区间。  
-   所以 swing 期的一部分 lag，不能再默认优先解释成机械结构问题。
+   `40/0.8`、`50/0.8` 在修正触地事件后同样落回小信号主导区。  
+   所以 swing 期的一部分 lag，更不应该默认先解释成机械结构问题。
 
 3. **`swing` 期更合理的优先解释是小信号死区 / 阈值敏感区 / 低幅值兑现困难。**  
    也就是：
@@ -111,9 +109,9 @@
 - `cmd -> state` 不是主瓶颈，这点不变
 - `state -> joint` 仍是主 lag 段，这点不变
 - 但 `swing` 期的 lag 不再默认等价于“机械结构故障”
-  - 其中 `30/0.4` 更接近 `dead_zone_dominant`
-  - `25/0.4`、`35/0.5`、`40/0.8` 更像 `mixed_dead_zone_and_realization`
-  - `50/0.8` 的 swing 期已经明显偏离死区主导
+  - `25/0.4`、`30/0.4`、`40/0.8` 现在都更接近 `dead_zone_dominant`
+  - `35/0.5` 保留为 `mixed_dead_zone_and_realization`
+  - `50/0.8 right_roll` 不再保留 `realization_dominant` 旧读法
 
 ### `12` 线
 

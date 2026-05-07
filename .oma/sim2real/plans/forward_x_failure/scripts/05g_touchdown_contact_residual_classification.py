@@ -73,34 +73,28 @@ def classify(row):
         "mixed_with_strong_foot_space_residual",
     )
 
-    pitch_participates = abs_pitch >= 0.12 or pitch_roll_count >= 2 or pitch_gain >= 5.0
-    joint_small_foot_large = abs_joint_roll <= 0.12 and abs_roll >= 1.0 and roll_gain >= 10.0
+    pitch_participates = abs_pitch >= 0.12 or pitch_roll_count >= 2 or pitch_gain >= 3.0
+    joint_small_foot_large = abs_joint_roll <= 0.12 and abs_roll >= 0.18 and roll_gain >= 2.5
     joint_sole_dominates = joint_sole - state_joint >= 20.0
 
     if foot_space_dominant and mirror_stable and joint_small_foot_large and not pitch_participates:
         label = "fk_foot_frame_residual_candidate"
         rationale = (
-            "mirror roll remains stable; ankle roll q is small while sole roll is large; "
-            "pitch participation is low, but sole_roll is MuJoCo FK-derived, so treat this as a foot-frame/contact residual candidate until real sole contact is validated"
+            "mirror roll remains stable; ankle roll q is small while baseline-corrected foot-frame roll residual remains material; "
+            "treat this as an FK foot-frame residual candidate until the real sole/contact frame is validated"
         )
     elif foot_space_dominant and pitch_participates:
         label = "pitch_roll_coupled_contact_residual"
-        rationale = (
-            "foot-space residual remains, but pitch participation is material; "
-            "do not reduce this case to pure roll contact edge"
-        )
+        rationale = "baseline-corrected foot-frame residual remains, but pitch participation is material; do not reduce this case to pure roll residual"
     elif foot_space_dominant and mirror_stable and mapping_count >= 2:
         label = "mapping_workpoint_residual"
-        rationale = (
-            "mirror pattern and parallel_mapping_mismatch remain, but joint-space amplification is less extreme; "
-            "focus on mapping table / real-mechanism workpoint consistency"
-        )
+        rationale = "mirror pattern and parallel_mapping_mismatch remain, but amplification is less extreme; focus on mapping table / real-mechanism workpoint consistency"
     elif joint_sole_dominates:
         label = "contact_geometry_residual"
-        rationale = "joint->sole lag dominates state->joint lag, but residual pattern is not clean enough for a narrower label"
+        rationale = "joint->sole lag dominates state->joint lag, but the corrected residual pattern is not clean enough for a narrower label"
     else:
         label = "mixed_or_uncertain_contact_residual"
-        rationale = "foot-space residual exists but current aggregates are not decisive"
+        rationale = "corrected foot-frame residual exists but current aggregates are not decisive"
 
     row["contact_residual_label"] = label
     row["contact_residual_rationale"] = rationale
@@ -134,7 +128,7 @@ def main():
         "- This is `05C`: only touchdown-window foot-space / contact residual is classified.",
         "- `13` owns swing dead-zone / small-signal realization.",
         "- `12` owns `actuator_state -> joint_pos` realization residual.",
-        "- This report only classifies what remains in `joint_pos -> sole_roll`.",
+        "- This report only classifies what remains in `joint_pos -> baseline-corrected foot-frame residual`.",
         "",
         "## Summary",
         "",

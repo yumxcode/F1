@@ -1,5 +1,8 @@
 # Round 3D Delay Chain Probe 结果
 
+> Audit note (2026-05-06): `06` 的延迟链逻辑本身保留有效，但不能再与审计前 `03/05` 的 raw foot-frame 结论绑定使用。  
+> 更新后的组合口径见 [16_real_round3_logic_audit_after_sim_contrast.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/16_real_round3_logic_audit_after_sim_contrast.md:1).
+
 本轮基于同一时间戳的三份日志：
 
 - [t25_action_20260326_102002.csv](/Users/yumx/code/X1/agibot_x1_infer/test_logs/data_csv/t25_action_20260326_102002.csv)

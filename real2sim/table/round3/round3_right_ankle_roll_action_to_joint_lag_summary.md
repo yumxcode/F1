@@ -7,28 +7,28 @@
 
 ## Summary
 
-| case | csv | window | events | mean |action| | mean signed action | mean lag (ms) | mean corr |
+| case | csv | window | events | mean_abs_action | mean signed action | mean lag (ms) | mean corr |
 |---|---|---|---:|---:|---:|---:|---:|
-| 35/0.5 retest_copy | t27_tracking_lag_b1_diag_20260428_152240.csv | swing | 3 | 0.245 | -0.146 | 36.079 | 0.231 |
-| 35/0.5 retest_copy | t27_tracking_lag_b1_diag_20260428_152240.csv | touchdown | 3 | 0.715 | -0.715 | 6.013 | 0.339 |
-| 50/0.8 right_roll | t27_tracking_lag_b1_diag_20260428_161322.csv | swing | 4 | 0.202 | -0.132 | 129.586 | 0.377 |
-| 50/0.8 right_roll | t27_tracking_lag_b1_diag_20260428_161322.csv | touchdown | 4 | 0.146 | -0.033 | 20.826 | 0.548 |
-| 40/0.8 right_roll | t27_tracking_lag_b1_diag_20260428_162312.csv | swing | 4 | 0.206 | -0.153 | 88.078 | 0.445 |
-| 40/0.8 right_roll | t27_tracking_lag_b1_diag_20260428_162312.csv | touchdown | 4 | 0.088 | -0.001 | 55.628 | 0.255 |
-| 25/0.5 right_roll | t27_tracking_lag_b1_diag_20260428_163825.csv | swing | 4 | 0.192 | -0.129 | 41.176 | 0.305 |
-| 25/0.5 right_roll | t27_tracking_lag_b1_diag_20260428_163825.csv | touchdown | 4 | 0.566 | -0.566 | 25.163 | 0.378 |
-| 25/0.5 all_ankles | t27_tracking_lag_b1_diag_20260428_164817.csv | swing | 4 | 0.184 | -0.135 | 113.128 | 0.273 |
-| 25/0.5 all_ankles | t27_tracking_lag_b1_diag_20260428_164817.csv | touchdown | 4 | 0.287 | -0.258 | 16.498 | 0.445 |
-| 25/0.5 all_ankles actuator | t27_tracking_lag_b1_diag_20260429_161248.csv | swing | 4 | 0.275 | -0.193 | 13.020 | 0.289 |
-| 25/0.5 all_ankles actuator | t27_tracking_lag_b1_diag_20260429_161248.csv | touchdown | 4 | 0.500 | -0.485 | 23.870 | 0.590 |
-| 25/0.4 all_ankles | t27_tracking_lag_b1_diag_20260430_100024.csv | swing | 4 | 0.221 | -0.067 | 24.683 | 0.287 |
-| 25/0.4 all_ankles | t27_tracking_lag_b1_diag_20260430_100024.csv | touchdown | 4 | 0.483 | -0.412 | 0.000 | 0.484 |
-| 30/0.4 all_ankles | t27_tracking_lag_b1_diag_20260430_100314.csv | swing | 4 | 0.345 | -0.288 | 59.207 | 0.207 |
-| 30/0.4 all_ankles | t27_tracking_lag_b1_diag_20260430_100314.csv | touchdown | 4 | 0.482 | -0.371 | 47.365 | 0.261 |
-| 35/0.5 all_ankles | t27_tracking_lag_b1_diag_20260430_100705.csv | swing | 4 | 0.389 | -0.158 | 44.030 | 0.257 |
-| 35/0.5 all_ankles | t27_tracking_lag_b1_diag_20260430_100705.csv | touchdown | 4 | 0.340 | -0.319 | 0.000 | 0.065 |
-| 40/0.8 all_ankles | t27_tracking_lag_b1_diag_20260430_101404.csv | swing | 4 | 0.187 | -0.141 | 148.723 | 0.468 |
-| 40/0.8 all_ankles | t27_tracking_lag_b1_diag_20260430_101404.csv | touchdown | 4 | 0.103 | -0.078 | 27.457 | 0.204 |
+| 35/0.5 retest_copy | t27_tracking_lag_b1_diag_20260428_152240.csv | swing | 4 | 0.079 | 0.045 | 151.083 | 0.615 |
+| 35/0.5 retest_copy | t27_tracking_lag_b1_diag_20260428_152240.csv | touchdown | 4 | 0.398 | -0.335 | 81.179 | 0.093 |
+| 50/0.8 right_roll | t27_tracking_lag_b1_diag_20260428_161322.csv | swing | 4 | 0.072 | 0.044 | 60.165 | 0.282 |
+| 50/0.8 right_roll | t27_tracking_lag_b1_diag_20260428_161322.csv | touchdown | 4 | 0.483 | -0.431 | 30.082 | 0.294 |
+| 40/0.8 right_roll | t27_tracking_lag_b1_diag_20260428_162312.csv | swing | 4 | 0.087 | 0.005 | 85.760 | 0.358 |
+| 40/0.8 right_roll | t27_tracking_lag_b1_diag_20260428_162312.csv | touchdown | 4 | 0.461 | -0.423 | 37.086 | 0.133 |
+| 25/0.5 right_roll | t27_tracking_lag_b1_diag_20260428_163825.csv | swing | 4 | 0.077 | 0.007 | 89.215 | 0.287 |
+| 25/0.5 right_roll | t27_tracking_lag_b1_diag_20260428_163825.csv | touchdown | 4 | 0.426 | -0.381 | 59.477 | 0.213 |
+| 25/0.5 all_ankles | t27_tracking_lag_b1_diag_20260428_164817.csv | swing | 4 | 0.106 | -0.005 | 73.062 | 0.392 |
+| 25/0.5 all_ankles | t27_tracking_lag_b1_diag_20260428_164817.csv | touchdown | 4 | 0.569 | -0.568 | 47.137 | 0.288 |
+| 25/0.5 all_ankles actuator | t27_tracking_lag_b1_diag_20260429_161248.csv | swing | 4 | 0.145 | -0.050 | 60.759 | 0.254 |
+| 25/0.5 all_ankles actuator | t27_tracking_lag_b1_diag_20260429_161248.csv | touchdown | 4 | 0.454 | -0.393 | 8.680 | 0.286 |
+| 25/0.4 all_ankles | t27_tracking_lag_b1_diag_20260430_100024.csv | swing | 4 | 0.093 | 0.048 | 76.294 | 0.364 |
+| 25/0.4 all_ankles | t27_tracking_lag_b1_diag_20260430_100024.csv | touchdown | 4 | 0.398 | -0.357 | 20.195 | 0.310 |
+| 30/0.4 all_ankles | t27_tracking_lag_b1_diag_20260430_100314.csv | swing | 4 | 0.085 | 0.026 | 99.467 | 0.326 |
+| 30/0.4 all_ankles | t27_tracking_lag_b1_diag_20260430_100314.csv | touchdown | 4 | 0.355 | -0.293 | 23.683 | 0.100 |
+| 35/0.5 all_ankles | t27_tracking_lag_b1_diag_20260430_100705.csv | swing | 3 | 0.139 | 0.030 | 61.797 | 0.500 |
+| 35/0.5 all_ankles | t27_tracking_lag_b1_diag_20260430_100705.csv | touchdown | 3 | 0.423 | -0.286 | 15.449 | 0.010 |
+| 40/0.8 all_ankles | t27_tracking_lag_b1_diag_20260430_101404.csv | swing | 4 | 0.073 | -0.007 | 54.913 | 0.293 |
+| 40/0.8 all_ankles | t27_tracking_lag_b1_diag_20260430_101404.csv | touchdown | 4 | 0.546 | -0.522 | 32.033 | 0.281 |
 
 ## Skipped
 

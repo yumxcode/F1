@@ -1,8 +1,8 @@
 # Round 4 低速步态验证候选方案
 
-状态：`blocked by 05D_fk_foot_frame_contact_review`。本方案原为 Round 3 候选执行稿；在真机数据仿真回放发现“踝关节落地时脚底板没有调整到位、斜着落地”，以及新增发现“落地时双脚高度差不够、摆动脚清高不足”后，本方案降级为 Round 4 候选。
+状态：`blocked by 05D_fk_foot_frame_contact_review`。本方案原为 Round 3 候选执行稿；2026-05-06 审计后继续 blocked，但阻塞原因已从旧版“确认 severe 斜脚触地后再复测”更新为：必须先确认 FK foot frame / 真实脚底接触平面 / contact edge 的对应关系，避免把受 frame 偏置污染的 residual 当成修复目标。
 
-当前 `01/03/04/06-13` 已完成阶段性收口，但 `05C` 只给出 FK 派生的 `fk_foot_frame_residual_candidate`，尚需先完成 `05D FK Foot-Frame / Contact 现场复核`。因此本方案仍保持 blocked。统一进展见 [00_forward_x_failure_progress_review.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/00_forward_x_failure_progress_review.md:1)。
+当前 `01/03/04/06-13` 已完成历史分析，`15-21` 已完成 sim 对照和审计修正。旧 `05C fk_foot_frame_residual_candidate 3/4` 已降级；本方案必须等 `05D FK Foot-Frame / Contact` 现场复核完成后再重新评估。统一进展见 [00_forward_x_failure_progress_review.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/00_forward_x_failure_progress_review.md:1) 和 [22_forward_x_failure_consistency_audit.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/22_forward_x_failure_consistency_audit.md:1)。
 
 目标：在不改动策略模型与步态时序参数的前提下，仅替换 `rl_walk_leg` 的踝关节 `kp/kd` 为 `Round 2A` 收敛值，验证真机低速行走的连续性、推进性和踝关节抖动是否改善。
 

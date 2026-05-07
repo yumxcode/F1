@@ -1,6 +1,8 @@
 # Round 3C Coupled Geometry 排查计划
 
-状态：`active`。本专项由 [04_tracking_lag_repair.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/04_tracking_lag_repair.md:1) 直接触发。
+状态：`active`。本专项由 [04_tracking_lag_repair.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/04_tracking_lag_repair.md:1) 直接触发，但 2026-05-06 审计后当前入口已收窄为 `05D FK Foot-Frame / Contact` 现场复核。
+
+审计后边界：旧 `05C = fk_foot_frame_residual_candidate 3/4` 强收口依赖 pre-audit raw FK foot-frame 指标，已被降级。当前 `05` 不再试图直接证明“FK sole residual 就是真实脚底接触残差”，而是先验证 FK foot frame / 真实 sole plane / contact edge 的对应关系。
 
 ## ⚡ 当前进度速览
 
@@ -10,16 +12,16 @@
 | `05B` Parallel Mapping Verification（代码侧） | ✅ 完成 | 无简单 sign bug；残差归到 mirrored code package + 机构/接触 residual |
 | `05B-2` 硬件侧（left/right ankle 对称阶跃对比） | ⬜ **未执行** | 计划中，仍待现场执行 |
 | `05B-3` 接触侧（足底状态检查） | ⬜ **未执行** | 计划中，与 05D Phase 2 合并 |
-| `05C` Touchdown Contact Residual Classification | ✅ 完成 | `fk_foot_frame_residual_candidate 3/4`，`pitch_roll_coupled_contact_residual 1/4` |
+| `05C` Touchdown Contact Residual Classification | ✅ 完成 / superseded-by-audit | 旧 `fk_foot_frame_residual_candidate 3/4` 已降级；校准后标签分散，不能强收口 |
 | `05D` FK Foot-Frame / Contact 现场复核 | ⬜ **当前唯一待执行项** | Phase 0-4 均未执行，是全项目当前第一优先级 |
 
 > 结果详见 [results/05_coupled_geometry_probe.md](../../results/forward_x_failure/05_coupled_geometry_probe.md)
 
 ## 进入条件
 
-当前进入本专项的依据已经满足：
+历史进入本专项的依据曾经满足，但以下强判断已被 2026-05-06 审计降级：
 
-- `severe_foot_flat_touchdown` 仍是所有有效样本前几步的稳定主问题
+- 旧 `severe_foot_flat_touchdown` 是 pre-audit raw FK foot-frame 口径，不再作为当前主问题表述
 - 单独调 `right_ankle_roll_joint` 参数不能关闭主问题
 - 当 4 个 ankle 全部调软到 `25 / 0.5` 后：
   - 脚掌多余抖动明显减轻
@@ -240,7 +242,7 @@
 5. ✅ 进入 `05C touchdown contact residual classification`
    - ✅ swing 小信号死区由 `13` 接管，已明确边界
    - ✅ `actuator_state -> joint_pos` realization lag 由 `12` 接管，已明确边界
-   - ✅ 当前分类结果：`fk_foot_frame_residual_candidate = 3/4`，`pitch_roll_coupled_contact_residual = 1/4`
+   - ✅ 历史分类结果：`fk_foot_frame_residual_candidate = 3/4`，`pitch_roll_coupled_contact_residual = 1/4`；该强收口已被审计降级，当前只作为 `05D` 待验证假设
    - ⬜ `05D` **当前第一优先级**：现场校准 FK foot frame → 拆分 `real_contact_edge_bias / foot_frame_reference_mismatch / dynamic_contact_deformation_or_release`
 
 ## 动态 Touchdown 检查计划

@@ -1,5 +1,7 @@
 # Round 3B Tracking Lag 修复线结果
 
+> Audit note (2026-05-06): this document used the pre-audit `severe_foot_flat_touchdown` / `command_not_flat` labels as success criteria. Those labels are now downgraded by [16_real_round3_logic_audit_after_sim_contrast.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/16_real_round3_logic_audit_after_sim_contrast.md:1) and [22_forward_x_failure_consistency_audit.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/22_forward_x_failure_consistency_audit.md:1). Keep this file as evidence that single-axis `kp/kd` tuning does not close the problem and can move symptoms between labels; do not use the old touchdown labels as current ground truth.
+
 轮次目标：验证仅通过提升 `right_ankle_roll_joint` 的执行参数，是否能关闭 Round 3 中的 `tracking_lag` 样本，并避免把问题转移成新的 touchdown 异常。
 
 ## 数据范围与有效性

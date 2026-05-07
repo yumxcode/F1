@@ -6,23 +6,23 @@
 
 ## Window-level Summary
 
-| window | cases | mean |lag gap| (ms) | mean |gain gap| | dominant lag side | dominant gain side | dominant shape side |
+| window | cases | mean_abs_lag_gap_ms | mean_abs_gain_gap | dominant lag side | dominant gain side | dominant shape side |
 |---|---:|---:|---:|---|---|---|
-| swing | 4 | 33.9174 | 1.0547 | left_worse | right_worse | right_worse |
-| touchdown | 4 | 24.3374 | 0.6927 | left_worse | left_worse | right_worse |
+| swing | 4 | 16.1560 | 0.0438 | right_worse | right_worse | right_worse |
+| touchdown | 4 | 10.6885 | 0.2789 | left_worse | right_worse | right_worse |
 
 ## Per-case View
 
 | case | window | lag gap (ms) | lag worse side | gain gap | gain worse side | shape gap | shape worse side |
 |---|---|---:|---|---:|---|---:|---|
-| 25/0.4 all_ankles | swing | -31.8811 | right_worse | -0.8068 | right_worse | -3.0000 | right_worse |
-| 25/0.4 all_ankles | touchdown | 28.3221 | left_worse | 0.0396 | left_worse | -2.0000 | right_worse |
-| 30/0.4 all_ankles | swing | 21.9108 | left_worse | 0.3295 | left_worse | -5.0000 | right_worse |
-| 30/0.4 all_ankles | touchdown | 29.1671 | left_worse | 0.4877 | left_worse | 2.0000 | left_worse |
-| 35/0.5 all_ankles | swing | 36.3680 | left_worse | 3.0152 | left_worse | -2.0000 | right_worse |
-| 35/0.5 all_ankles | touchdown | 9.9465 | left_worse | 1.5521 | left_worse | -3.0000 | right_worse |
-| 40/0.8 all_ankles | swing | 45.5097 | left_worse | -0.0675 | right_worse | 2.0000 | left_worse |
-| 40/0.8 all_ankles | touchdown | 29.9139 | left_worse | -0.6915 | right_worse | 2.0000 | left_worse |
+| 25/0.4 all_ankles | swing | -19.4984 | right_worse | -0.0737 | right_worse | -1.0000 | right_worse |
+| 25/0.4 all_ankles | touchdown | 2.7632 | left_worse | -0.2982 | right_worse | -2.0000 | right_worse |
+| 30/0.4 all_ankles | swing | -34.6531 | right_worse | 0.0008 | left_worse | -2.0000 | right_worse |
+| 30/0.4 all_ankles | touchdown | 5.0308 | left_worse | 0.1453 | left_worse | -3.0000 | right_worse |
+| 35/0.5 all_ankles | swing | 8.0956 | left_worse | -0.0229 | right_worse | 1.0000 | left_worse |
+| 35/0.5 all_ankles | touchdown | -32.3928 | right_worse | -0.4983 | right_worse | -2.0000 | right_worse |
+| 40/0.8 all_ankles | swing | -2.3768 | right_worse | 0.0779 | left_worse | -5.0000 | right_worse |
+| 40/0.8 all_ankles | touchdown | 2.5672 | left_worse | -0.1738 | right_worse | -2.0000 | right_worse |
 
 ## Interpretation
 

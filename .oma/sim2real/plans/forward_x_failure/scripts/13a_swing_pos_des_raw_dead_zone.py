@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import glob
+import importlib.util
 import math
 import os
 from collections import defaultdict
@@ -29,6 +30,21 @@ SWING_PRE_SEC = 0.35
 SWING_POST_SEC = 0.02
 SMALL_SIGNAL_THRESH_RAD = 0.10
 BIN_WIDTH_RAD = 0.05
+
+
+def load_module(module_name: str, path: str):
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Failed to load module spec from {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+ROUND3A = load_module(
+    "round3a_plan",
+    os.path.join(SCRIPT_DIR, "03a_round3_landing_window_analysis.py"),
+)
 
 
 def parse_scalar(key, value):
@@ -104,14 +120,8 @@ def infer_case_label(filename: str) -> str:
 
 
 def detect_right_touchdowns(rows):
-    events = []
-    prev = 0
-    for row in rows:
-        curr = int(row.get("right_contact", 0) or 0)
-        if curr == 1 and prev == 0:
-            events.append(row["time_sec"])
-        prev = curr
-    return events
+    events = sorted(ROUND3A.detect_touchdowns(rows), key=lambda event: event.timestamp_sec)
+    return [event.timestamp_sec for event in events if event.side == "right"]
 
 
 def classify_right_event(rows, event_time_sec):
@@ -187,6 +197,7 @@ def main():
         filename = os.path.basename(path)
         case_label = infer_case_label(filename)
         rows = load_csv(path)
+        ROUND3A.attach_fk_metrics(rows)
         events = detect_right_touchdowns(rows)[:4]
         if not events:
             skipped_rows.append({"case_label": case_label, "diag_csv": filename, "reason": "no_right_touchdown_events"})
@@ -240,7 +251,7 @@ def main():
         handle.write("# Swing Dead-Zone Audit on pos_des_raw\n\n")
         handle.write("- Scope: all local `t27_tracking_lag_b1_diag_*.csv` samples.\n")
         handle.write("- Signal: `pos_des_raw_right_ankle_roll_joint` only.\n")
-        handle.write("- Event selection: first 4 `right` touchdown events per file.\n")
+        handle.write("- Event selection: first 4 `right` touchdown events per file from current `ROUND3A.detect_touchdowns()`.\n")
         handle.write("- Window: `swing = touchdown-350ms .. touchdown-20ms`.\n")
         handle.write(f"- Small-signal threshold: `|pos_des_raw| <= {SMALL_SIGNAL_THRESH_RAD:.2f} rad`.\n\n")
         handle.write("## Summary\n\n")

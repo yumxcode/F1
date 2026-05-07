@@ -1,6 +1,8 @@
 # Round 3B Tracking Lag 修复线
 
-状态：`executed`。本线由 [03_ankle_landing_attitude_resolution.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/03_ankle_landing_attitude_resolution.md:1) 直接触发，本轮执行结论见 [04_tracking_lag_repair.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/04_tracking_lag_repair.md:1)。
+状态：`executed / reinterpreted-by-audit`。本线由 [03_ankle_landing_attitude_resolution.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/03_ankle_landing_attitude_resolution.md:1) 直接触发，本轮执行结论见 [04_tracking_lag_repair.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/04_tracking_lag_repair.md:1)。
+
+2026-05-06 审计后，本线不再用旧 `severe_foot_flat_touchdown / command_not_flat` 标签作为修复成败真值；当前只保留其负结论：单轴 `kp/kd` 扫参不能关闭问题，且会在多个旧标签之间转移表现。因此 `kp/kd` 不是下一步第一入口。
 
 ## 目标
 

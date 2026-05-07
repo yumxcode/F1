@@ -9,16 +9,17 @@
 
 ## Summary
 
-- `swing` source guesses: `{'execution_chain_dominant': 3}`
-- `touchdown` source guesses: `{'mixed_or_uncertain': 1, 'execution_chain_dominant': 2}`
+- `swing` source guesses: `{'execution_chain_dominant': 4}`
+- `touchdown` source guesses: `{'execution_chain_dominant': 3, 'output_chain_dominant': 1}`
 
 ## Per Event
 
 | side | touchdown_time_sec | swing sole mean abs | touchdown sole mean abs | swing source guess | touchdown source guess | swing action->sole lag ms | swing target->sole lag ms | swing current->sole lag ms | swing pos->sole lag ms | touchdown action->sole lag ms | touchdown target->sole lag ms | touchdown current->sole lag ms | touchdown pos->sole lag ms |
 |---|---:|---:|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| right | 1774491603.921 | 1.8944 | 1.5948 | execution_chain_dominant | mixed_or_uncertain | 63.7865 | 63.7865 | 173.1348 | 54.6741 | 18.2247 | 18.2247 | 136.6854 | 136.6854 |
-| right | 1774491607.211 | 1.9436 | 1.6732 | execution_chain_dominant | execution_chain_dominant | 9.1124 | 9.1124 | 109.3483 | 9.1124 | 0.0000 | 0.0000 | 127.5730 | 27.3371 |
-| left | 1774491607.741 | 1.9431 | 1.6433 | execution_chain_dominant | execution_chain_dominant | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 18.2247 | 18.2247 | 0.0000 | 0.0000 |
+| left | 1774491603.481 | 0.3222 | 0.0528 | execution_chain_dominant | execution_chain_dominant | 36.4494 | 36.4494 | 63.7865 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 9.1124 |
+| right | 1774491603.881 | 0.2722 | 0.0701 | execution_chain_dominant | output_chain_dominant | 91.1236 | 91.1236 | 100.2359 | 36.4494 | 0.0000 | 0.0000 | 27.3371 | 27.3371 |
+| left | 1774491604.171 | 0.2563 | 0.0451 | execution_chain_dominant | execution_chain_dominant | 164.0224 | 164.0224 | 63.7865 | 0.0000 | 18.2247 | 18.2247 | 0.0000 | 9.1124 |
+| right | 1774491604.551 | 0.2740 | 0.0603 | execution_chain_dominant | execution_chain_dominant | 0.0000 | 0.0000 | 182.2472 | 72.8989 | 18.2247 | 18.2247 | 36.4494 | 45.5618 |
 
 ## Interpretation
 

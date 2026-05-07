@@ -1,6 +1,8 @@
 # Round 3 摆腿清高与落地窗口联合诊断方案
 
-状态：`done`。本轮由真机数据仿真回放的新现象触发：机器人无法前进行走时，脚踝落地瞬间脚底板没有调整到位，表现为斜着落地；后续结果已确认当前第一阻塞项是 `severe_foot_flat_touchdown`。摆腿清高、髋膝时序和执行链问题作为并发问题保留，但不再作为当前第一入口。
+状态：`done / superseded-by-audit`。本轮由真机数据仿真回放的新现象触发，是早期定位 swing-to-touchdown 问题的历史计划。
+
+2026-05-06 审计后，本计划里的 `severe_foot_flat_touchdown` 第一阻塞项口径已经降级：旧判断使用了 pre-audit raw FK foot-frame 读法，受到固定 frame 偏置污染。当前有效口径见 [22_forward_x_failure_consistency_audit.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/22_forward_x_failure_consistency_audit.md:1)。摆腿清高、髋膝时序和执行链问题仍作为并发问题保留，但下一步第一入口是 `05D FK Foot-Frame / Contact` 现场复核。
 
 统一进展和指标口径见 [00_forward_x_failure_progress_review.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/00_forward_x_failure_progress_review.md:1)。
 
@@ -132,11 +134,10 @@ H8：策略给出了足够的髋/膝摆动目标，但实际 `q` 跟不上，主
 - Round 3 改为本文件的摆腿清高与落地窗口联合诊断，不再直接低速行走验证。
 - 原 [02_low_speed_walk_validation_candidate.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/forward_x_failure/02_low_speed_walk_validation_candidate.md) 降级为下一阶段候选；后续 `05/12/13` 已把进入门槛进一步收紧为先完成 `05D FK Foot-Frame / Contact` 现场复核。
 
-## 本轮结束条件（已全部达成 ✅）
+## 本轮结束条件（历史口径，已被 2026-05-06 审计降级）
 
-- ✅ 已分析左右脚各 7/8 次 touchdown（Round 3 日志，`7/7` → 后续 `8/8`）
-- ✅ 已输出每次 touchdown 的 `max_swing_clearance`、触地前指标和 `foot_flat_error`（见 [results/02_round3_landing_window_diagnosis.md](../../results/forward_x_failure/02_round3_landing_window_diagnosis.md)）
-- ✅ 主导判因已确定：`severe_foot_flat_touchdown` 为主因（`8/8`），`foot_clearance_deficit` 和 `hip_knee_tracking_lag` 作为并发问题保留
-- ✅ 下一步已明确为：新建踝落地姿态专项（即 `03_ankle_landing_attitude_resolution`），不直接进入低速行走复测
+- 历史上已分析左右脚 touchdown，并输出 `max_swing_clearance`、触地前指标和 raw FK `foot_flat_error`。
+- 历史上曾判定 `severe_foot_flat_touchdown` 为主因，但该判断已被 [16_real_round3_logic_audit_after_sim_contrast.md](../../results/forward_x_failure/16_real_round3_logic_audit_after_sim_contrast.md) 和 [22_forward_x_failure_consistency_audit.md](../../results/forward_x_failure/22_forward_x_failure_consistency_audit.md) supersede。
+- 当前只保留本计划的窗口化诊断价值：swing-to-touchdown 窗口、清高、髋膝时序、命令链和执行链仍是要记录的信号；旧 raw FK foot-frame 强结论不再直接引用。
 
 > 本轮执行结果详见 [results/02_round3_landing_window_diagnosis.md](../../results/forward_x_failure/02_round3_landing_window_diagnosis.md)

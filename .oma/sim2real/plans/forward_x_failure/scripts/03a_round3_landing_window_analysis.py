@@ -2,6 +2,7 @@ import csv
 import glob
 import math
 import os
+import statistics
 import tempfile
 from dataclasses import dataclass
 
@@ -29,7 +30,7 @@ def find_repo_root(start_dir: str) -> str:
 
 BASE_DIR = find_repo_root(SCRIPT_DIR)
 LOG_DIR = os.path.join(BASE_DIR, "test_logs", "data_csv")
-OUT_DIR = os.path.join(SCRIPT_DIR, "table", "round3")
+OUT_DIR = os.path.join(BASE_DIR, "real2sim", "table", "round3")
 XML_PATH = os.path.join(
     BASE_DIR,
     "src",
@@ -100,8 +101,18 @@ STABLE_TOUCHDOWN_MAX_DESCENT_MPS = 0.05
 STABLE_TOUCHDOWN_MAX_FLAT_ERR_RATE = 1.2
 STABLE_TOUCHDOWN_MAX_FOOT_X_RATE = 0.20
 TOUCHDOWN_DEDUP_SEC = 0.08
-SEVERE_FOOT_FLAT_ERROR_RAD = 1.0
+FOOT_FRAME_RESIDUAL_GATE_RAD = 0.10
+LARGE_FOOT_FRAME_RESIDUAL_RAD = 0.20
 EARLY_TOUCHDOWN_LIMIT = 4
+KIN_SWING_CLEARANCE_M = 0.04
+KIN_TOUCHDOWN_REL_HEIGHT_M = 0.025
+KIN_DESCENT_VEL_MPS = 0.015
+KIN_SETTLE_VEL_MPS = 0.08
+KIN_SIDE_REFRACTORY_SEC = 0.30
+KIN_STABLE_SEARCH_SEC = 0.08
+KIN_POST_STABLE_SEC = 0.05
+KIN_POST_REL_HEIGHT_M = 0.035
+KIN_HIP_DELTA_MIN_RAD = 0.02
 
 
 @dataclass
@@ -189,6 +200,18 @@ def matrix_to_roll_pitch_yaw(rot: np.ndarray):
     return roll, pitch, yaw
 
 
+def wrap_angle(angle: float) -> float:
+    while angle > math.pi:
+        angle -= 2.0 * math.pi
+    while angle < -math.pi:
+        angle += 2.0 * math.pi
+    return angle
+
+
+def angle_diff(angle: float, bias: float) -> float:
+    return wrap_angle(angle - bias)
+
+
 def phase_fraction(row) -> float:
     return (math.atan2(row["phase_sin"], row["phase_cos"]) / (2.0 * math.pi)) % 1.0
 
@@ -238,16 +261,44 @@ def attach_fk_metrics(rows):
             row[f"{side}_foot_z"] = float(data.xpos[body_id, 2])
             rot = np.array(data.xmat[body_id]).reshape(3, 3)
             roll, pitch, _ = matrix_to_roll_pitch_yaw(rot)
-            row[f"{side}_sole_roll"] = roll
-            row[f"{side}_sole_pitch"] = pitch
+            row[f"{side}_sole_roll_raw"] = roll
+            row[f"{side}_sole_pitch_raw"] = pitch
             row[f"{side}_sole_normal_z"] = float(rot[2, 2])
 
-        row["left_foot_flat_error"] = math.sqrt(
-            row["left_sole_pitch"] ** 2 + row["left_sole_roll"] ** 2
-        )
-        row["right_foot_flat_error"] = math.sqrt(
-            row["right_sole_pitch"] ** 2 + row["right_sole_roll"] ** 2
-        )
+    side_bias = {}
+    for side in ("left", "right"):
+        stable_rows = [
+            row
+            for row in rows
+            if int(row[f"{side}_contact"]) == 1
+            and int(row[f"{'right' if side == 'left' else 'left'}_contact"]) == 1
+            and abs(row["base_euler_x"]) <= 0.20
+            and abs(row["base_euler_y"]) <= 0.20
+            and abs(row["base_ang_vel_x"]) <= 0.50
+            and abs(row["base_ang_vel_y"]) <= 0.50
+        ]
+        if stable_rows:
+            roll_bias = statistics.median(row[f"{side}_sole_roll_raw"] for row in stable_rows)
+            pitch_bias = statistics.median(row[f"{side}_sole_pitch_raw"] for row in stable_rows)
+        else:
+            roll_bias = 0.0
+            pitch_bias = 0.0
+        side_bias[side] = (roll_bias, pitch_bias, len(stable_rows))
+
+    for row in rows:
+        for side in ("left", "right"):
+            roll_bias, pitch_bias, stable_count = side_bias[side]
+            roll_corr = angle_diff(row[f"{side}_sole_roll_raw"], roll_bias)
+            pitch_corr = angle_diff(row[f"{side}_sole_pitch_raw"], pitch_bias)
+            row[f"{side}_sole_roll_bias"] = roll_bias
+            row[f"{side}_sole_pitch_bias"] = pitch_bias
+            row[f"{side}_sole_bias_sample_count"] = stable_count
+            row[f"{side}_sole_roll"] = roll_corr
+            row[f"{side}_sole_pitch"] = pitch_corr
+            row[f"{side}_foot_flat_error_raw"] = math.sqrt(
+                row[f"{side}_sole_pitch_raw"] ** 2 + row[f"{side}_sole_roll_raw"] ** 2
+            )
+            row[f"{side}_foot_flat_error"] = math.sqrt(pitch_corr ** 2 + roll_corr ** 2)
 
     for side in ("left", "right"):
         prev_z = rows[0][f"{side}_foot_z"]
@@ -423,6 +474,115 @@ def find_stable_touchdown_index(rows, first_contact_idx, candidate_idx, side):
     return best_idx
 
 
+def find_index_at_or_after(rows, target_time):
+    for idx, row in enumerate(rows):
+        if row["time_sec"] >= target_time:
+            return idx
+    return len(rows) - 1
+
+
+def hip_motion_ok(rows, swing_start_idx, touchdown_idx, side):
+    hip_key = f"pos_{side}_hip_pitch_joint"
+    values = [row[hip_key] for row in rows[swing_start_idx : touchdown_idx + 1] if hip_key in row]
+    if len(values) < 3:
+        return False
+    return max(values) - min(values) >= KIN_HIP_DELTA_MIN_RAD
+
+
+def post_stable_kinematic_ok(rows, touchdown_idx, side):
+    end_idx = find_index_at_or_after(rows, rows[touchdown_idx]["time_sec"] + KIN_POST_STABLE_SEC)
+    if end_idx <= touchdown_idx:
+        return False
+    post_rows = rows[touchdown_idx : end_idx + 1]
+    low_rows = [row for row in post_rows if row[f"{side}_rel_height"] <= KIN_POST_REL_HEIGHT_M]
+    return len(low_rows) >= max(2, int(0.6 * len(post_rows)))
+
+
+def choose_stable_kinematic_touchdown_index(rows, candidate_idx, side):
+    end_idx = find_index_at_or_after(rows, rows[candidate_idx]["time_sec"] + KIN_STABLE_SEARCH_SEC)
+    best_idx = candidate_idx
+    best_score = None
+    for idx in range(candidate_idx, end_idx + 1):
+        row = rows[idx]
+        rel_height = row[f"{side}_rel_height"]
+        vz = row[f"{side}_foot_vz"]
+        vx = row[f"{side}_foot_vx"]
+        flat_rate = row[f"{side}_flat_error_rate"]
+        stable = (
+            rel_height <= KIN_TOUCHDOWN_REL_HEIGHT_M
+            and abs(vz) <= KIN_SETTLE_VEL_MPS
+            and post_stable_kinematic_ok(rows, idx, side)
+        )
+        score = (
+            0 if stable else 1,
+            max(rel_height, 0.0),
+            abs(vz),
+            abs(vx),
+            abs(flat_rate),
+            idx,
+        )
+        if best_score is None or score < best_score:
+            best_score = score
+            best_idx = idx
+        if stable:
+            return idx
+    return best_idx
+
+
+def detect_touchdowns_from_kinematics(rows, side):
+    events = []
+    state = "wait_swing"
+    swing_start_idx = None
+    peak_idx = None
+    last_event_time = -1e9
+    for idx in range(2, len(rows) - 2):
+        row = rows[idx]
+        rel_height = row[f"{side}_rel_height"]
+        prev_rel = rows[idx - 1][f"{side}_rel_height"]
+        vz = row[f"{side}_foot_vz"]
+        prev_vz = rows[idx - 1][f"{side}_foot_vz"]
+
+        if row["time_sec"] - last_event_time < KIN_SIDE_REFRACTORY_SEC:
+            continue
+
+        if state == "wait_swing":
+            if rel_height >= KIN_SWING_CLEARANCE_M:
+                state = "in_swing"
+                swing_start_idx = idx
+                peak_idx = idx
+            continue
+
+        if state == "in_swing":
+            if rel_height > rows[peak_idx][f"{side}_rel_height"]:
+                peak_idx = idx
+            descending = prev_vz <= -KIN_DESCENT_VEL_MPS or rel_height < prev_rel
+            low_enough = rel_height <= KIN_TOUCHDOWN_REL_HEIGHT_M
+            settling = abs(vz) <= KIN_SETTLE_VEL_MPS or (
+                prev_vz < -KIN_DESCENT_VEL_MPS and vz >= -KIN_SETTLE_VEL_MPS
+            )
+            if descending and low_enough and settling:
+                stable_idx = choose_stable_kinematic_touchdown_index(rows, idx, side)
+                if (
+                    hip_motion_ok(rows, swing_start_idx, stable_idx, side)
+                    and post_stable_kinematic_ok(rows, stable_idx, side)
+                ):
+                    events.append(
+                        TouchdownEvent(
+                            side,
+                            stable_idx,
+                            rows[stable_idx]["time_sec"],
+                            "kinematic_fk_hip",
+                            idx,
+                            rows[idx]["time_sec"],
+                        )
+                    )
+                    last_event_time = rows[stable_idx]["time_sec"]
+                state = "wait_swing"
+                swing_start_idx = None
+                peak_idx = None
+    return events
+
+
 def detect_touchdowns_from_contact(rows, side):
     contact_key = f"{side}_contact"
     prev_contact = 0
@@ -477,7 +637,9 @@ def detect_touchdowns_from_geometry(rows, side):
 def detect_touchdowns(rows):
     events = []
     for side in ("left", "right"):
-        side_events = detect_touchdowns_from_contact(rows, side)
+        side_events = detect_touchdowns_from_kinematics(rows, side)
+        if not side_events:
+            side_events = detect_touchdowns_from_contact(rows, side)
         if not side_events:
             side_events = detect_touchdowns_from_geometry(rows, side)
         events.extend(side_events)
@@ -550,19 +712,19 @@ def summarize_event(rows, event: TouchdownEvent):
     flat_error_touch = touch_row[f"{swing_side}_foot_flat_error"]
 
     all_flags = []
-    if flat_error_touch >= SEVERE_FOOT_FLAT_ERROR_RAD:
-        all_flags.append("severe_foot_flat_touchdown")
+    if flat_error_touch >= LARGE_FOOT_FRAME_RESIDUAL_RAD:
+        all_flags.append("large_foot_frame_residual_touchdown")
     if max_clearance < CLEARANCE_MIN_METERS or clearance_pre50 < CONTACT_PRE_MARGIN_METERS:
         all_flags.append("foot_clearance_deficit")
     if abs(hip_err_pre50) > HIP_KNEE_TRACKING_ERR_RAD or abs(knee_err_pre50) > HIP_KNEE_TRACKING_ERR_RAD:
         all_flags.append("hip_knee_tracking_lag")
     if knee_peak_to_touchdown > 0.20:
         all_flags.append("early_knee_extension")
-    if flat_error_touch > 0.05 and (
+    if flat_error_touch > FOOT_FRAME_RESIDUAL_GATE_RAD and (
         abs(ankle_pitch_err_touch) > TRACKING_ERR_RAD or abs(ankle_roll_err_touch) > TRACKING_ERR_RAD
     ):
         all_flags.append("tracking_lag")
-    elif flat_error_touch > 0.05:
+    elif flat_error_touch > FOOT_FRAME_RESIDUAL_GATE_RAD:
         all_flags.append("command_not_flat")
     if not all_flags:
         all_flags.append("no_clear_blocker_detected")
@@ -578,7 +740,7 @@ def summarize_event(rows, event: TouchdownEvent):
         "touchdown_source": event.source,
         "primary_flag": primary_flag,
         "all_flags": "|".join(all_flags),
-        "has_severe_foot_flat_touchdown": int("severe_foot_flat_touchdown" in all_flags),
+        "has_large_foot_frame_residual_touchdown": int("large_foot_frame_residual_touchdown" in all_flags),
         "has_foot_clearance_deficit": int("foot_clearance_deficit" in all_flags),
         "has_hip_knee_tracking_lag": int("hip_knee_tracking_lag" in all_flags),
         "has_early_knee_extension": int("early_knee_extension" in all_flags),
@@ -590,6 +752,12 @@ def summarize_event(rows, event: TouchdownEvent):
         "foot_flat_error_touch_rad": flat_error_touch,
         "sole_pitch_touch_rad": touch_row[f"{swing_side}_sole_pitch"],
         "sole_roll_touch_rad": touch_row[f"{swing_side}_sole_roll"],
+        "foot_flat_error_touch_raw_rad": touch_row[f"{swing_side}_foot_flat_error_raw"],
+        "sole_pitch_touch_raw_rad": touch_row[f"{swing_side}_sole_pitch_raw"],
+        "sole_roll_touch_raw_rad": touch_row[f"{swing_side}_sole_roll_raw"],
+        "sole_pitch_bias_rad": touch_row[f"{swing_side}_sole_pitch_bias"],
+        "sole_roll_bias_rad": touch_row[f"{swing_side}_sole_roll_bias"],
+        "sole_bias_sample_count": touch_row[f"{swing_side}_sole_bias_sample_count"],
         "hip_err_minus_50ms_rad": hip_err_pre50,
         "knee_err_minus_50ms_rad": knee_err_pre50,
         "ankle_pitch_err_touch_rad": ankle_pitch_err_touch,
@@ -622,7 +790,8 @@ def write_summary_md(path, diag_path, summaries, title="Round 3 Landing Window S
         if note:
             handle.write(f"- Note: {note}\n")
         handle.write(f"- Mean max swing clearance: `{mean_clearance:.4f} m`\n")
-        handle.write(f"- Mean touchdown foot-flat error: `{mean_flat_error:.4f} rad`\n\n")
+        handle.write(f"- Mean touchdown baseline-corrected foot-frame residual: `{mean_flat_error:.4f} rad`\n")
+        handle.write("- Foot attitude is baseline-corrected per side using stable double-support frames from the same log.\n\n")
         handle.write("| side | touchdown_time_sec | primary_flag | all_flags | max_swing_clearance_m | clearance_at_minus_50ms_m | foot_flat_error_touch_rad |\n")
         handle.write("|---|---:|---|---|---:|---:|---:|\n")
         for row in summaries:

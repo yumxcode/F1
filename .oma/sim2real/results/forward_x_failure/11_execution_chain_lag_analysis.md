@@ -14,6 +14,34 @@
 - lag 在哪个窗口被放大
 - 左右踝是否存在稳定不对称
 
+## `joint->sole` 口径说明
+
+本线里的 `joint->sole lag`，当前应读作：
+
+> `joint -> baseline-corrected FK foot-frame residual`
+
+这里的 `sole_roll` 不是未经修正的 `sole_roll_raw`，而是 FK 计算后再减去每侧稳定姿态 bias 的 `sole_roll`。因此，旧的“raw FK sole 整体偏大、把 residual 全部抬高”问题，在当前 `11` 线结果里已经被显著缓解。
+
+但需要保留两个边界：
+
+1. 它仍然是 FK foot-frame proxy，不是真实接触边缘。
+2. bias 估计的 stable rows 仍借助 `left_contact/right_contact` 辅助筛选，因此 bias 锚点不是最终物理真值。
+
+所以，`joint->sole lag` 当前可以用来说明：
+
+- `state->joint` 之后仍然存在后半段 residual
+- 这个 residual 在不同窗口 / case 上的量级变化
+
+但它不能单独证明 residual 的物理来源已经锁定为真实 sole/contact edge；这仍然属于 `05D` 的任务范围。
+
+另外，当前 `11c/11d` 已对 `joint->sole` 增加相关性质量门槛：
+
+- 原始值保留为 audit 用 `joint_sole_lag_ms_raw`
+- 汇总默认使用 corr-gated `joint_sole_lag_ms`
+- 门槛：`joint_sole_corr >= 0.20`
+
+这样做的原因是：短 touchdown 窗口里，`sole_roll` 若过平、过弱或相关性退化，`joint->sole` 很容易命中边界 lag，抬高均值，但并不代表稳定的物理后段延迟。
+
 ## 当前已知事实
 
 基于 [10_execution_chain_disentanglement.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/10_execution_chain_disentanglement.md:1)：
@@ -95,6 +123,12 @@
 1. `state -> joint` 的大 lag 普遍在 `swing` 窗就已经存在，不是 touchdown 才突然出现。
 2. `touchdown` 窗的 `state -> joint lag` 在这 `4` 组里都比 `swing` 更小。
 3. 因此，当前不再把“touchdown 接触放大 lag”作为默认主解释；更合理的主解释是 **pre-contact execution lag**。
+
+对 `joint->sole` 需要补一个限制：
+
+- `swing` 窗 filtered `joint->sole` 仍整体偏大，说明后半段 residual 不是 touchdown 才出现
+- `touchdown` 窗 raw `joint->sole` 里混有短窗口相关性退化样本，不能直接把 raw 均值和 `state->joint` 做一一物理对比
+- 当前默认应优先看 filtered `joint->sole`
 
 窗口均值概览：
 

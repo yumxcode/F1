@@ -1,5 +1,9 @@
 # Round 3C Coupled Geometry 排查结果
 
+> Audit note (2026-05-06): the old strong `05C`收口依赖了未校准的 raw FK foot-frame 指标。  
+> After rerun, `05C` no longer collapses to `fk_foot_frame_residual_candidate 3/4`; the calibrated labels are now split across `mapping_workpoint_residual / mixed_or_uncertain_contact_residual / pitch_roll_coupled_contact_residual / contact_geometry_residual`. See [16_real_round3_logic_audit_after_sim_contrast.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/16_real_round3_logic_audit_after_sim_contrast.md:1).
+> Current consistency audit: [22_forward_x_failure_consistency_audit.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/22_forward_x_failure_consistency_audit.md:1). Current action is `05D FK Foot-Frame / Contact`; old `parallel_mapping_mismatch` / `fk_foot_frame_residual_candidate` wording is retained only as historical pre-audit evidence.
+
 轮次目标：在 `04_tracking_lag_repair` 已经证明”单独扫 ankle kp/kd 不能收敛主问题”的基础上，进一步回答：
 
 1. 抖动压住后，脚底为什么仍以错误几何姿态 touchdown
@@ -13,7 +17,7 @@
 | `05B` Parallel Mapping（代码侧） | ✅ 完成 | 无简单 sign bug；残差→ mirrored code + 机构/接触 residual |
 | `05B-2` 硬件侧阶跃对比 | ⬜ 未执行 | 计划中 |
 | `05B-3` 接触侧足底检查 | ⬜ 未执行 | 与 05D Phase 2 合并 |
-| `05C` Contact Residual Classification | ✅ 完成 | `fk_foot_frame_residual_candidate 3/4`，`pitch_roll_coupled_contact_residual 1/4` |
+| `05C` Contact Residual Classification | ✅ 完成 / superseded-by-audit | 旧 `fk_foot_frame_residual_candidate 3/4` 强收口已降级；当前只作为 `05D` 待验证假设 |
 | `05D` FK Foot-Frame 现场复核 | ⬜ **全部待执行** | Phase 0-4 均未执行，**当前第一优先级** |
 
 ## 数据与脚本

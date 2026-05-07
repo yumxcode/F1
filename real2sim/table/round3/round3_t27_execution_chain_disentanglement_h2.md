@@ -8,13 +8,13 @@
 
 ## 摘要
 
-| case | events | mean |sole_roll| | mean lpf->pos lag (ms) | mean pos->sole lag (ms) | H2 proxy support | dominant source |
+| case | events | mean_abs_sole_roll | mean lpf->pos lag (ms) | mean pos->sole lag (ms) | H2 proxy support | dominant source |
 |---|---:|---:|---:|---:|---:|---|
-| 35/0.5 baseline | 4 | 1.6941 | 133.0428 | 0.0000 | 0.7500 | execution_chain_dominant |
-| 50/0.8 right_roll | 4 | 1.7233 | 136.5278 | 18.5122 | 0.7500 | execution_chain_dominant |
-| 40/0.8 right_roll | 4 | 1.6043 | 134.4351 | 71.8532 | 0.5000 | output_chain_dominant |
-| 25/0.5 right_roll | 4 | 1.5744 | 141.8291 | 9.1503 | 1.0000 | execution_chain_dominant |
-| 25/0.5 all_ankles | 4 | 1.6298 | 143.7665 | 16.4978 | 1.0000 | execution_chain_dominant |
+| 35/0.5 baseline | 4 | 0.0622 | 135.2978 | 15.7847 | 0.7500 | execution_chain_dominant |
+| 50/0.8 right_roll | 4 | 0.0624 | 138.8419 | 46.2806 | 0.7500 | execution_chain_dominant |
+| 40/0.8 right_roll | 4 | 0.0738 | 141.3886 | 50.9926 | 0.7500 | execution_chain_dominant |
+| 25/0.5 right_roll | 4 | 0.0588 | 134.9664 | 9.1503 | 1.0000 | execution_chain_dominant |
+| 25/0.5 all_ankles | 4 | 0.0599 | 141.4096 | 9.4273 | 0.7500 | execution_chain_dominant |
 
 ## 解释
 

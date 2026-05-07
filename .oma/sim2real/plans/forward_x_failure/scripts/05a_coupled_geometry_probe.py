@@ -24,8 +24,8 @@ ROUND3_DIR = os.path.join(BASE_DIR, "real2sim", "table", "round3")
 OUT_DIR = ROUND3_DIR
 EARLY_TOUCHDOWN_LIMIT = 4
 SMALL_JOINT_BIAS_RAD = 0.10
-LARGE_SOLE_ROLL_RAD = 0.45
-LARGE_SOLE_PITCH_RAD = 0.25
+LARGE_SOLE_ROLL_RAD = 0.15
+LARGE_SOLE_PITCH_RAD = 0.12
 FOOT_TO_JOINT_GAIN_RATIO = 2.5
 SMALL_TRACKING_ERR_RAD = 0.10
 
@@ -215,6 +215,7 @@ def write_summary(path: str, diag_path: str, rows, side_majority, cross_side_pat
         handle.write("# Coupled Geometry Probe Summary\n\n")
         handle.write(f"- Source diag csv: `{diag_path}`\n")
         handle.write(f"- Touchdowns analyzed: `{len(rows)}` (first `{EARLY_TOUCHDOWN_LIMIT}` only)\n")
+        handle.write("- `sole_pitch_touch_rad / sole_roll_touch_rad` below are baseline-corrected foot-frame residuals, not raw ankle-roll-link orientation.\n")
         handle.write(f"- Dominant axis counts: `{dict(dominant_axis_counts)}`\n")
         handle.write(f"- Touchdown attitude counts: `{dict(attitude_counts)}`\n")
         handle.write(f"- Three-layer root counts: `{dict(cause_counts)}`\n")
@@ -223,10 +224,10 @@ def write_summary(path: str, diag_path: str, rows, side_majority, cross_side_pat
         handle.write(f"- Cross-side roll pattern: `{cross_side_pattern}`\n\n")
 
         handle.write("## Interpretation\n\n")
-        handle.write("- `roll_axis_sign_or_zero_bias`: touchdown roll sign on one side is stable, ankle roll joint angle itself is not large, but sole roll remains large.\n")
-        handle.write("- `pitch_roll_coupling_mismatch`: pitch and roll both materially participate in touchdown tilt.\n")
-        handle.write("- `parallel_mapping_mismatch`: left/right roll sign shows mirror-stable behavior or foot-space tilt is strongly amplified relative to joint-space motion, and tracking cannot explain it away.\n")
-        handle.write("- `touchdown_contact_geometry_bias`: joint-space values are not extreme, but touchdown foot attitude remains biased and is more consistent with contact geometry or foot reference mismatch.\n\n")
+        handle.write("- `roll_axis_sign_or_zero_bias`: touchdown roll sign on one side is stable, ankle roll joint angle itself is not large, but baseline-corrected foot-frame roll residual remains material.\n")
+        handle.write("- `pitch_roll_coupling_mismatch`: pitch and roll both materially participate in the corrected touchdown residual.\n")
+        handle.write("- `parallel_mapping_mismatch`: left/right roll sign shows mirror-stable behavior or corrected foot-frame tilt is strongly amplified relative to joint-space motion, and tracking cannot explain it away.\n")
+        handle.write("- `touchdown_contact_geometry_bias`: joint-space values are not extreme, but corrected touchdown foot-frame residual remains biased and is more consistent with contact geometry or foot reference mismatch.\n\n")
 
         handle.write("## Per-Touchdown Table\n\n")
         handle.write("| side | touchdown_time_sec | attitude_type | sole_pitch_touch_rad | sole_roll_touch_rad | ankle_pitch_q_touch_rad | ankle_roll_q_touch_rad | ankle_pitch_err_touch_rad | ankle_roll_err_touch_rad | roll_to_joint_gain_ratio | suspected_geometry_mode | rationale |\n")

@@ -103,7 +103,10 @@ def main():
                     "mean_state_joint_left_lag_ms": mean([r["state_joint_left_lag_ms"] for r in items]),
                     "mean_state_joint_right_lag_ms": mean([r["state_joint_right_lag_ms"] for r in items]),
                     "mean_state_joint_lag_ms": mean([r["state_joint_mean_lag_ms"] for r in items]),
+                    "mean_joint_sole_lag_ms_raw": mean([r["joint_sole_lag_ms_raw"] for r in items]),
                     "mean_joint_sole_lag_ms": mean([r["joint_sole_lag_ms"] for r in items]),
+                    "median_joint_sole_lag_ms": W.median([r["joint_sole_lag_ms"] for r in items]),
+                    "joint_sole_valid_events": sum(r["joint_sole_pass_corr_gate"] for r in items),
                     "mean_cmd_state_left_lag_ms": mean([r["cmd_state_left_lag_ms"] for r in items]),
                     "mean_cmd_state_right_lag_ms": mean([r["cmd_state_right_lag_ms"] for r in items]),
                     "mean_abs_sole_roll": mean([r["mean_abs_sole_roll"] for r in items]),
@@ -124,15 +127,16 @@ def main():
         handle.write("# 11D Multi-sample Execution Chain Lag Compare\n\n")
         handle.write("- Scope: 4 actuator-state t27 logs with all-ankle tuning.\n")
         handle.write("- Windows: `swing = touchdown-350ms .. touchdown-20ms`, `touchdown = touchdown-50ms .. touchdown+100ms`.\n")
-        handle.write("- Focus: `cmd->state`, `state->joint`, `joint->sole`, and left/right asymmetry.\n\n")
+        handle.write("- Focus: `cmd->state`, `state->joint`, `joint->sole`, and left/right asymmetry.\n")
+        handle.write(f"- `joint->sole` filtered summary keeps events with `joint_sole_corr >= {W.JOINT_SOLE_MIN_CORR:.2f}`; raw summary is preserved for audit.\n\n")
 
         handle.write("## Window Summary\n\n")
-        handle.write("| case | window | events | mean left state->joint (ms) | mean right state->joint (ms) | mean state->joint (ms) | mean joint->sole (ms) | mean left cmd->state (ms) | mean right cmd->state (ms) | mean_abs_sole_roll |\n")
-        handle.write("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|\n")
+        handle.write("| case | window | events | joint->sole valid | mean left state->joint (ms) | mean right state->joint (ms) | mean state->joint (ms) | mean joint->sole raw (ms) | mean joint->sole filtered (ms) | median joint->sole filtered (ms) | mean left cmd->state (ms) | mean right cmd->state (ms) | mean_abs_sole_roll |\n")
+        handle.write("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
         for row in summary_rows:
             handle.write(
-                f"| {row['case_label']} | {row['window']} | {int(row['events'])} | {fmt(row['mean_state_joint_left_lag_ms'])} | {fmt(row['mean_state_joint_right_lag_ms'])} | "
-                f"{fmt(row['mean_state_joint_lag_ms'])} | {fmt(row['mean_joint_sole_lag_ms'])} | {fmt(row['mean_cmd_state_left_lag_ms'])} | "
+                f"| {row['case_label']} | {row['window']} | {int(row['events'])} | {int(row['joint_sole_valid_events'])} | {fmt(row['mean_state_joint_left_lag_ms'])} | {fmt(row['mean_state_joint_right_lag_ms'])} | "
+                f"{fmt(row['mean_state_joint_lag_ms'])} | {fmt(row['mean_joint_sole_lag_ms_raw'])} | {fmt(row['mean_joint_sole_lag_ms'])} | {fmt(row['median_joint_sole_lag_ms'])} | {fmt(row['mean_cmd_state_left_lag_ms'])} | "
                 f"{fmt(row['mean_cmd_state_right_lag_ms'])} | {fmt(row['mean_abs_sole_roll'])} |\n"
             )
 
@@ -155,6 +159,7 @@ def main():
         handle.write("\n## Interpretation\n\n")
         handle.write("- If `cmd->state` stays near zero across all 4 cases, command acceptance is not the main lag segment.\n")
         handle.write("- If `state->joint` is consistently large already in `swing`, the lag is pre-contact rather than touchdown-induced.\n")
+        handle.write("- If raw `joint->sole` is much larger than filtered `joint->sole`, first suspect short-window correlation instability before reading it as a physical lag increase.\n")
         handle.write("- If left-right asymmetry is stable across cases, hardware/structure asymmetry priority rises.\n")
         handle.write("- Use `round3_execution_chain_lag_multi_sample_detail.csv` for event-level review.\n")
 

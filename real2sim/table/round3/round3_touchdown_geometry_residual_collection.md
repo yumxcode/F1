@@ -8,11 +8,11 @@
 
 ## Per Case
 
-- `25/0.4 all_ankles` -> `foot_space_or_contact_residual_dominant`: `state->joint=23.6ms`, `joint->sole=71.8ms`, `abs_sole_roll=1.7768`, `roll_gain=74.6846`, `pattern=bilateral_mirror_stable`, `geometry=parallel_mapping_mismatch`
-- `30/0.4 all_ankles` -> `mixed_with_strong_foot_space_residual`: `state->joint=26.1ms`, `joint->sole=11.8ms`, `abs_sole_roll=1.7249`, `roll_gain=170.5229`, `pattern=bilateral_mirror_stable`, `geometry=parallel_mapping_mismatch`
-- `35/0.5 all_ankles` -> `foot_space_or_contact_residual_dominant`: `state->joint=4.6ms`, `joint->sole=74.2ms`, `abs_sole_roll=1.8361`, `roll_gain=570718.8108`, `pattern=bilateral_mirror_stable`, `geometry=parallel_mapping_mismatch`
-- `40/0.8 all_ankles` -> `foot_space_or_contact_residual_dominant`: `state->joint=20.6ms`, `joint->sole=48.0ms`, `abs_sole_roll=1.6852`, `roll_gain=23.5217`, `pattern=bilateral_mirror_stable`, `geometry=parallel_mapping_mismatch`
+- `25/0.4 all_ankles` -> `mixed_residual`: `state->joint=41.5ms`, `joint->sole=35.9ms`, `abs_sole_roll=0.1351`, `roll_gain=6.1447`, `pattern=bilateral_mirror_stable`, `geometry=parallel_mapping_mismatch`
+- `30/0.4 all_ankles` -> `geometry_residual_dominant_but_not_mirror_stable`: `state->joint=7.1ms`, `joint->sole=49.7ms`, `abs_sole_roll=0.0914`, `roll_gain=3.8815`, `pattern=bilateral_same_sign`, `geometry=parallel_mapping_mismatch`
+- `35/0.5 all_ankles` -> `mixed_residual`: `state->joint=22.0ms`, `joint->sole=13.9ms`, `abs_sole_roll=0.1659`, `roll_gain=76443.3557`, `pattern=bilateral_same_sign`, `geometry=touchdown_contact_geometry_bias`
+- `40/0.8 all_ankles` -> `foot_space_or_contact_residual_dominant`: `state->joint=12.6ms`, `joint->sole=57.2ms`, `abs_sole_roll=0.1495`, `roll_gain=5.1959`, `pattern=bilateral_mirror_stable`, `geometry=parallel_mapping_mismatch`
 
 ## Current Reading
 
-- residual counts: `{'foot_space_or_contact_residual_dominant': 3, 'mixed_with_strong_foot_space_residual': 1}`
+- residual counts: `{'mixed_residual': 2, 'geometry_residual_dominant_but_not_mirror_stable': 1, 'foot_space_or_contact_residual_dominant': 1}`

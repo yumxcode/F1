@@ -2,16 +2,16 @@
 
 状态：`active`。这是当前 sim2real 主问题的入口文件。
 
-## ⚡ 当前进度速览（阶段性整理，问题仍在推进中）
+## 当前进度速览（2026-05-06 审计后）
 
 | 分类 | 内容 |
 |---|---|
 | **当前唯一待执行项** | ⬜ `05D FK Foot-Frame / Contact 现场复核`（Phase 0-4，见 [05_coupled_geometry_probe.md](./05_coupled_geometry_probe.md)） |
 | **当前阻塞项** | ⏸ `02_low_speed_walk_validation_candidate`，等待 `05D` 完成后才允许执行 |
-| **已完成** | ✅ 01 / 03 / 04 / 05A / 05B / 05C / 06 / 07 / 08 / 09 / 10 / 11 / 12 / 13 |
-| **当前主结论** | touchdown 残差锁定为 `fk_foot_frame_residual_candidate 3/4` + `pitch_roll_coupled_contact_residual 1/4`，需现场校准 FK foot frame 后才能进一步分类处理 |
+| **已完成** | ✅ 01 / 03 / 04 / 05A / 05B / 05C / 06 / 07 / 08 / 09 / 10 / 11 / 12 / 13 / 15-21 审计与 real/sim 对照 |
+| **当前主结论** | real 的 touchdown residual 已越过 sim 可接受包络，并叠加 `state -> joint -> sole` 执行链残差与高 `kp` 抖动放大；旧 `8/8 severe_foot_flat_touchdown`、旧 sim `command_not_flat` 和旧 `05C fk_foot_frame_residual_candidate 3/4` 均已被审计降级 |
 
-> 统一进展和边界口径见 [results/00_forward_x_failure_progress_review.md](../../results/forward_x_failure/00_forward_x_failure_progress_review.md)
+> 统一进展和边界口径见 [results/00_forward_x_failure_progress_review.md](../../results/forward_x_failure/00_forward_x_failure_progress_review.md)；18/19/20 合并结论见 [21_real_vs_sim_combined_conclusion.md](../../results/forward_x_failure/21_real_vs_sim_combined_conclusion.md)；plan/results 一致性审计见 [22_forward_x_failure_consistency_audit.md](../../results/forward_x_failure/22_forward_x_failure_consistency_audit.md)。
 
 ## 问题定义
 
@@ -28,13 +28,16 @@
 
 | 假设 | 含义 | 对应子方案 |
 |---|---|---|
-| `severe_foot_flat_touchdown` | touchdown 时脚板姿态严重不平，已成为当前更上游的主导阻塞项 | [03_ankle_landing_attitude_resolution.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/forward_x_failure/03_ankle_landing_attitude_resolution.md:1) |
-| `command_not_flat` | 早期三层判因中，touchdown 前目标本身不足以把脚底调平 | [03_ankle_landing_attitude_resolution.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/forward_x_failure/03_ankle_landing_attitude_resolution.md:1) |
+| `touchdown_residual_over_sim_envelope` | real touchdown 几何 / 接触残差已经超出 sim 稳定前走时可接受包络，是当前主线 | [21_real_vs_sim_combined_conclusion.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/21_real_vs_sim_combined_conclusion.md:1) |
+| `frame_bias_contamination` | 旧 raw FK foot-frame 直接当真实脚底平面的读法污染了 `03/05/15` 的部分强结论 | [16_real_round3_logic_audit_after_sim_contrast.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/16_real_round3_logic_audit_after_sim_contrast.md:1)，[22_forward_x_failure_consistency_audit.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/22_forward_x_failure_consistency_audit.md:1) |
+| `execution_chain_residual` | output 不是主瓶颈；real 更明显的问题在 `state -> joint`，且 swing 期已存在 | [19_real_vs_sim_execution_chain_compare.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/19_real_vs_sim_execution_chain_compare.md:1) |
+| `touchdown_jitter_amplification` | 新 kinematic touchdown 口径下，real/sim 周期一致；real 仍表现为更大的 roll/pitch joint 调整幅值、路径和 tracking error，roll touchdown 最明显；`kp` 更像放大器 | [20_real_vs_sim_joint_jitter_compare.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/20_real_vs_sim_joint_jitter_compare.md:1)，[24_touchdown_gait_period_compare.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/24_touchdown_gait_period_compare.md:1) |
+| `command_not_flat` | 早期三层判因之一；旧 sim/real 强判断已降级，只能作为候选标签而非当前第一修复入口 | [03_ankle_landing_attitude_resolution.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/forward_x_failure/03_ankle_landing_attitude_resolution.md:1) |
 | `tracking_lag` | 目标有调平意图但真实关节没到位；后续统一读作执行链响应问题，不再单独作为第一修复入口 | [04_tracking_lag_repair.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/forward_x_failure/04_tracking_lag_repair.md:1)，[11_execution_chain_lag_analysis.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/forward_x_failure/11_execution_chain_lag_analysis.md:1) |
 | `tracking_lag_repair` | 已验证单轴 `right_ankle_roll_joint` 扫参不能关闭主问题，只会改变表现形式 | [04_tracking_lag_repair.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/forward_x_failure/04_tracking_lag_repair.md:1) |
 | `filter_delay` | raw 目标提前，但 LPF 后目标晚到，导致调平动作迟到 | [01_landing_window_diagnosis.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/forward_x_failure/01_landing_window_diagnosis.md:1) |
 | `phase_mismatch` | 策略相位/真实 touchdown 不对齐，调平动作发生在触地后 | [01_landing_window_diagnosis.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/forward_x_failure/01_landing_window_diagnosis.md:1) |
-| `coupled_geometry` | 当前专指 touchdown 窗 `joint_pos -> sole_roll` 仍解释不完的 foot-space / contact residual | [05_coupled_geometry_probe.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/forward_x_failure/05_coupled_geometry_probe.md:1) |
+| `coupled_geometry` | 当前专指 touchdown 窗 `joint_pos -> sole` 仍解释不完的 foot-space / contact residual；必须先经 `05D` 验证真实物理含义 | [05_coupled_geometry_probe.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/forward_x_failure/05_coupled_geometry_probe.md:1) |
 | `windowed_roll_origin_probe` | 在腾空窗与 touchdown 窗中，对比 output / target / current / pos 与 `sole_roll` 的对应关系，判断更像输出链还是执行链驱动 | [07_windowed_roll_origin_probe.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/forward_x_failure/07_windowed_roll_origin_probe.md:1) |
 | `windowed_roll_origin_probe_t27` | 基于 t27 单文件诊断日志，在腾空窗与 touchdown 窗中对比 `action / pos_des_raw / pos_des_lpf / pos` 与 `sole_roll` 的对应关系 | [08_windowed_roll_origin_probe_t27.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/forward_x_failure/08_windowed_roll_origin_probe_t27.md:1) |
 | `phase_lag_limit_cycle_compare_t27` | 基于 t27 多组 kp 数据，对比 touchdown 窗内 `lpf -> pos -> sole_roll` 的相位滞后、零交叉和环面积，判断是否存在高 kp 局部相位滞后引发的限环趋势 | [09_phase_lag_limit_cycle_compare_t27.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/forward_x_failure/09_phase_lag_limit_cycle_compare_t27.md:1) |
@@ -81,10 +84,10 @@
 |---|---|
 | [00_forward_x_failure_progress_review.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/00_forward_x_failure_progress_review.md:1) | 当前主问题统一进展、边界和全局指标字典；后续文档若有歧义，以此文件的边界为准 |
 | [01_field_baseline.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/01_field_baseline.md:1) | Round 1 基础链路、站立、RL 小速度初测结果 |
-| [02_round3_landing_window_diagnosis.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/02_round3_landing_window_diagnosis.md:1) | Round 3 touchdown 判因结果；新版脚本下为 `8` 次 touchdown，`primary_flag` 主因仍锁定为 `severe_foot_flat_touchdown`，并同步保留并发 flags |
-| [03_ankle_landing_attitude_resolution.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/03_ankle_landing_attitude_resolution.md:1) | Round 3A 踝落地姿态专项结果；新版脚本下 `8/8` 为 roll 主导，三层根因为 `command_not_flat 4 / tracking_lag 2 / coupled_geometry 2` |
-| [04_tracking_lag_repair.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/04_tracking_lag_repair.md:1) | Round 3B 执行链修复结果；按前 `4` 步优先口径，单轴 `right roll` 扫参表现出明显 tradeoff，未关闭主问题，停止继续盲调 |
-| [05_coupled_geometry_probe.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/05_coupled_geometry_probe.md:1) | Round 3C 几何/映射排查结果；在 `4 ankles = 25 / 0.5` 数据上，refined geometry 首轮收敛为 `parallel_mapping_mismatch 4 / 4`；`05A/05B` 已排除 controller offset、yaml direction、简单 actuator ownership/sign bug；`05C` 将原 `contact_edge_or_foot_frame_residual` 降级为 `fk_foot_frame_residual_candidate 3 / 4`，另有 `pitch_roll_coupled_contact_residual 1 / 4`；主线转向 FK foot frame 校准、真实足底接触边缘和接触线 / 滚动中心 |
+| [02_round3_landing_window_diagnosis.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/02_round3_landing_window_diagnosis.md:1) | Round 3 touchdown 历史判因结果；旧 `8/8 severe_foot_flat_touchdown` 已被 frame 偏置审计降级，仅作 pre-audit 过程记录 |
+| [03_ankle_landing_attitude_resolution.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/03_ankle_landing_attitude_resolution.md:1) | Round 3A 踝落地姿态历史结果；旧 `8/8 roll dominant` 和 `command_not_flat 4` 不再作为当前修复入口 |
+| [04_tracking_lag_repair.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/04_tracking_lag_repair.md:1) | Round 3B 执行链修复历史结果；单轴 `right roll` 扫参表现出 tradeoff，未关闭问题；审计后保留为“不要盲扫 kp/kd”的证据 |
+| [05_coupled_geometry_probe.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/05_coupled_geometry_probe.md:1) | Round 3C 几何/映射历史结果；旧 `parallel_mapping_mismatch` / `fk_foot_frame_residual_candidate 3/4` 已降级，当前只保留为 `05D FK Foot-Frame / Contact` 待验证假设 |
 | [06_delay_chain_probe.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/06_delay_chain_probe.md:1) | Round 3D 延迟链排查结果；`action -> target` 近似 0 ms，主要延迟出现在 `target/current -> pos` 执行链，且 ankle 不是这份日志里最慢的一组，因此 current 数据更支持“执行链存在延迟，但不足以单独解释 coupled_geometry” |
 | [07_windowed_roll_origin_probe.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/07_windowed_roll_origin_probe.md:1) | Round 3E 窗口化 `sole_roll` 来源排查；腾空窗 `3/3`、touchdown 窗 `2/3` 都更偏 `execution_chain_dominant`，说明这份数据里 `sole_roll` 更接近执行链响应，而不是立即的 output 链 |
 | [08_windowed_roll_origin_probe_t27.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/08_windowed_roll_origin_probe_t27.md:1) | Round 3F t27 窗口化 `sole_roll` 来源排查；在最新 t27 诊断日志上，腾空窗 `3/4`、touchdown 窗 `3/4` 更偏 `execution_chain_dominant`，`sole_roll` 仍主要跟随执行链而不是即时 output 链 |
@@ -93,6 +96,17 @@
 | [11_execution_chain_lag_analysis.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/11_execution_chain_lag_analysis.md:1) | Round 3I 执行链 lag 分析；`4` 组 actuator-state 多样本复核后，主滞后段仍更像 `actuator_state -> joint_pos`，且 lag 普遍在 `swing` 期已明显存在；`left/right asymmetry` 明显但慢侧不稳定，现阶段不能收口为单侧固定故障 |
 | [12_parallel_actuation_realization_probe.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/12_parallel_actuation_realization_probe.md:1) | Round 3J 并联执行兑现分析；当前 `12A + 12B + 12C` 已表明 `state -> joint` 更像 `backlash / hysteresis` 主导，并发 `low_realization_gain` 与 `mode-dependent asymmetry`；它能解释一部分 `swing` 异常，但不能替代 `05` 去解释 touchdown 期的主要 `sole_roll` 残差 |
 | [13_dead_zone_audit.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/13_dead_zone_audit.md:1) | Round 3K 死区审视结果；当前主证据已收缩到 `swing` 期 `pos_des_raw`，并显示一部分 `swing` lag 应优先按小信号死区 / 阈值敏感区理解，而不应默认先归到机械结构 |
+| [15_sim_t27_03_06_analysis.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/15_sim_t27_03_06_analysis.md:1) | sim `03/06` 历史分析；已被 `17` 审计降级，不能作为 sim failure 证据 |
+| [16_real_round3_logic_audit_after_sim_contrast.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/16_real_round3_logic_audit_after_sim_contrast.md:1) | real `03/05/06` 审计；确认旧 raw FK foot-frame 结论受 frame 偏置污染 |
+| [17_sim_round3_reaudit_with_video_fact.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/17_sim_round3_reaudit_with_video_fact.md:1) | sim 视频事实复审；确认 sim 能前走，仅左脚轻微外翻 |
+| [18_real_vs_sim_residual_acceptance_comparison.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/18_real_vs_sim_residual_acceptance_comparison.md:1) | 定义 sim 可接受 residual 包络，并指出 real 超限项 |
+| [19_real_vs_sim_execution_chain_compare.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/19_real_vs_sim_execution_chain_compare.md:1) | 对比 real/sim 执行链，确认 output 不是主瓶颈 |
+| [20_real_vs_sim_joint_jitter_compare.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/20_real_vs_sim_joint_jitter_compare.md:1) | 基于新 kinematic touchdown 窗口，对比 swing/touchdown roll/pitch joint 调整/抖动；确认 real 的 range/path/track err 仍更重，pitch touchdown 高频结论降级 |
+| [24_touchdown_gait_period_compare.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/24_touchdown_gait_period_compare.md:1) | 验证新 touchdown detector 下 real/sim 步态周期一致，修正旧 contact proxy 导致的早期同侧误触发 |
+| [25_kinematic_touchdown_detector_audit.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/25_kinematic_touchdown_detector_audit.md:1) | 对比旧 ankle-pitch 低速 contact proxy 与新 FK+hip kinematic detector，确认 real 前 4 次 touchdown 恢复正常交替 |
+| [26_touchdown_detector_reaudit_and_plan_update.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/26_touchdown_detector_reaudit_and_plan_update.md:1) | 汇总触地检测修正、重新计算结果和 plan/results 受影响范围 |
+| [21_real_vs_sim_combined_conclusion.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/21_real_vs_sim_combined_conclusion.md:1) | 合并 `18/19/20` 的 canonical 结论 |
+| [22_forward_x_failure_consistency_audit.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/22_forward_x_failure_consistency_audit.md:1) | 本轮 plan/results 一致性审计和下一步工作 |
 
 kp/kd 辨识结果放在 `results/sim2real_steps/ankle_kp_kd/`：
 
@@ -101,6 +115,17 @@ kp/kd 辨识结果放在 `results/sim2real_steps/ankle_kp_kd/`：
 | [round_02_ankle_kp_kd_identification.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/sim2real_steps/ankle_kp_kd/round_02_ankle_kp_kd_identification.md:1) | Round 2 踝关节 kp/kd 辨识结果 |
 
 ## 推进顺序
+
+### 审计后推进顺序（当前有效）
+
+1. `01/03/05` 的 pre-audit 结果保留为历史诊断过程，但其中 `8/8 severe_foot_flat_touchdown`、`8/8 roll dominant`、`mean 1.6~1.9 rad` 和旧 `05C fk_foot_frame_residual_candidate 3/4` 不再作为当前结论。
+2. 今天的 sim 多 `kp/kd` 结果已经确认：sim 能稳定前走，仅左脚轻微外翻且无明显抖动；因此旧 sim `03/06` 的 `severe / command_not_flat` 读法失效。
+3. 当前采用 `16/17/18/19/20/21/22` 的审计后口径：real 的关键问题是 residual 越过 sim 可接受包络，并叠加执行链兑现残差与 touchdown 抖动放大。
+4. `03` 的 `command_not_flat / tracking_lag / coupled_geometry` 仍可作为历史分类标签，但不再直接决定下一轮修复入口；下一轮入口由 `05D` 的 foot/contact frame 复核结果决定。
+5. 当前第一优先级是 `05D FK Foot-Frame / Contact`：确认 `joint -> sole residual` 的真实物理含义，再决定修 foot/contact 建模、执行链兑现，还是策略 touchdown 姿态目标。
+6. `02_low_speed_walk_validation_candidate` 继续 blocked，直到 `05D` 给出明确修复入口。
+
+### 历史推进顺序（pre-audit，仅保留过程记录）
 
 1. `01_landing_window_diagnosis` 已用已有真机日志和仿真回放定位双脚高度差不足、斜着落地和无法前进的主因。
 2. 当前 `01` 的结果已经表明主导阻塞为 `severe_foot_flat_touchdown`，因此先执行 `03_ankle_landing_attitude_resolution`。
