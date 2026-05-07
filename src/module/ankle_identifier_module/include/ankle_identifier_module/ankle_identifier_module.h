@@ -123,6 +123,7 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   std::unordered_map<std::string, size_t> joint_index_;
   std::unordered_map<std::string, JointSnapshot> latest_joint_state_;
   std::unordered_map<std::string, double> startup_target_positions_;
+  std::vector<std::string> startup_target_joint_names_;
   std::vector<std::string> joint_names_;
   my_ros2_proto::msg::JointCommand baseline_cmd_;
   sensor_msgs::msg::Imu latest_imu_;

@@ -92,7 +92,14 @@ def summarize_rows(rows):
     }
 
 
-def build_summary(csv_path, measured_angle_deg, pose_name=None, measurement_method="spirit_level"):
+def build_summary(
+    csv_path,
+    measured_angle_deg,
+    pose_name=None,
+    measurement_method="spirit_level",
+    test_kp=None,
+    test_kd=None,
+):
     rows = load_rows(csv_path)
     phase_name, analysis_rows = select_analysis_rows(rows)
     stats = summarize_rows(analysis_rows)
@@ -141,6 +148,8 @@ def build_summary(csv_path, measured_angle_deg, pose_name=None, measurement_meth
         "measured_sole_roll_rad": measured_sole_roll_rad,
         "measured_sole_pitch_rad": measured_sole_pitch_rad,
         "measurement_method": measurement_method,
+        "test_kp": test_kp,
+        "test_kd": test_kd,
         "fk_body_name": f"link_{side}_ankle_roll" if side in {"left", "right"} else "",
         "time_sec_start": stats["time_sec_start"],
         "time_sec_end": stats["time_sec_end"],
@@ -211,7 +220,9 @@ def maybe_write_csv_row(path, summary):
         "operator_note": (
             f"analysis_phase={summary['analysis_phase_used']}; "
             f"sample_count={summary['sample_count']}; "
-            f"axis_error_rad={summary['axis_error_rad']:.6f}"
+            f"axis_error_rad={summary['axis_error_rad']:.6f}; "
+            f"test_kp={summary['test_kp']}; "
+            f"test_kd={summary['test_kd']}"
         ),
     }
 
@@ -246,6 +257,18 @@ def parse_args():
         help="Label written into the summary, default: spirit_level.",
     )
     parser.add_argument(
+        "--test-kp",
+        type=float,
+        default=None,
+        help="Optional explicit kp label for this test.",
+    )
+    parser.add_argument(
+        "--test-kd",
+        type=float,
+        default=None,
+        help="Optional explicit kd label for this test.",
+    )
+    parser.add_argument(
         "--json-out",
         default=None,
         help="Optional path to save the full summary as json.",
@@ -265,6 +288,8 @@ def main():
         measured_angle_deg=args.measured_angle_deg,
         pose_name=args.pose_name,
         measurement_method=args.measurement_method,
+        test_kp=args.test_kp,
+        test_kd=args.test_kd,
     )
     maybe_write_json(args.json_out, summary)
     maybe_write_csv_row(args.csv_row_out, summary)

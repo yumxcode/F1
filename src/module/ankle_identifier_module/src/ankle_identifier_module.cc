@@ -170,6 +170,7 @@ void AnkleIdentifierModule::PrepareTargets() {
 
 bool AnkleIdentifierModule::LoadStartupPoseTargets() {
   startup_target_positions_.clear();
+  startup_target_joint_names_.clear();
   if (startup_pose_mode_ == StartupPoseMode::kCurrent) return true;
 
   AIMRT_INFO("Loading startup pose targets from {}", reference_control_cfg_path_);
@@ -180,6 +181,7 @@ bool AnkleIdentifierModule::LoadStartupPoseTargets() {
   }
 
   if (startup_pose_mode_ == StartupPoseMode::kZero) {
+    startup_target_joint_names_ = joint_list;
     AIMRT_INFO("Startup pose mode: zero. All startup targets initialized to 0.");
     return true;
   }
@@ -196,6 +198,7 @@ bool AnkleIdentifierModule::LoadStartupPoseTargets() {
   for (size_t i = 0; i < stand_joints.size(); ++i) {
     startup_target_positions_[stand_joints[i]] = stand_init[i];
   }
+  startup_target_joint_names_ = stand_joints;
   AIMRT_INFO(
       "Startup pose mode: stand. Key targets: left_knee_pitch={:.3f}, right_knee_pitch={:.3f}, "
       "left_ankle_pitch={:.3f}, right_ankle_pitch={:.3f}",
@@ -381,7 +384,10 @@ bool AnkleIdentifierModule::TryCaptureStableBaseline() {
   double max_target_error = 0.0;
   bool target_reached = true;
   if (startup_pose_mode_ != StartupPoseMode::kCurrent) {
-    for (const auto& [joint_name, target_position] : startup_target_positions_) {
+    for (const auto& joint_name : startup_target_joint_names_) {
+      const auto target_it = startup_target_positions_.find(joint_name);
+      if (target_it == startup_target_positions_.end()) continue;
+      const double target_position = target_it->second;
       const auto snapshot_it = latest_joint_state_.find(joint_name);
       if (snapshot_it == latest_joint_state_.end()) continue;
       const double abs_error = std::abs(snapshot_it->second.position - target_position);
