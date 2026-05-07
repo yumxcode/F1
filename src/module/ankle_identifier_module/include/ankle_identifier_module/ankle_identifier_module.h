@@ -102,6 +102,7 @@ class AnkleIdentifierModule : public aimrt::ModuleBase {
   double startup_stable_sec_ = 1.0;
   double startup_joint_vel_threshold_ = 0.05;
   double startup_gyro_threshold_ = 0.2;
+  double startup_target_pos_threshold_ = 0.03;
   int repeat_count_ = 3;
   bool use_imu_ = true;
   bool auto_stop_after_test_ = true;

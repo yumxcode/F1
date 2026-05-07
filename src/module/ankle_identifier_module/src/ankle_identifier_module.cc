@@ -76,6 +76,7 @@ bool AnkleIdentifierModule::LoadConfig() {
     AIMRT_ERROR("Init failed, [file_path] Empty");
     return false;
   }
+  AIMRT_INFO("Loading ankle identifier config from {}", file_path);
 
   YAML::Node cfg_node = YAML::LoadFile(file_path.data());
   joint_cmd_topic_ = cfg_node["joint_cmd_topic"].as<std::string>("/joint_cmd");
@@ -129,6 +130,7 @@ bool AnkleIdentifierModule::LoadConfig() {
   startup_stable_sec_ = cfg_node["startup_stable_sec"].as<double>(1.0);
   startup_joint_vel_threshold_ = cfg_node["startup_joint_vel_threshold"].as<double>(0.05);
   startup_gyro_threshold_ = cfg_node["startup_gyro_threshold"].as<double>(0.2);
+  startup_target_pos_threshold_ = cfg_node["startup_target_pos_threshold"].as<double>(0.03);
   use_imu_ = cfg_node["use_imu"].as<bool>(true);
   auto_stop_after_test_ = cfg_node["auto_stop_after_test"].as<bool>(true);
   hold_target_after_active_ = cfg_node["hold_target_after_active"].as<bool>(false);
@@ -169,13 +171,17 @@ bool AnkleIdentifierModule::LoadStartupPoseTargets() {
   startup_target_positions_.clear();
   if (startup_pose_mode_ == StartupPoseMode::kCurrent) return true;
 
+  AIMRT_INFO("Loading startup pose targets from {}", reference_control_cfg_path_);
   YAML::Node cfg_node = YAML::LoadFile(reference_control_cfg_path_);
   const auto joint_list = cfg_node["joint_list"].as<std::vector<std::string>>();
   for (const auto& joint_name : joint_list) {
     startup_target_positions_[joint_name] = 0.0;
   }
 
-  if (startup_pose_mode_ == StartupPoseMode::kZero) return true;
+  if (startup_pose_mode_ == StartupPoseMode::kZero) {
+    AIMRT_INFO("Startup pose mode: zero. All startup targets initialized to 0.");
+    return true;
+  }
 
   const auto stand_cfg = cfg_node["controllers"]["pd_stand"];
   const auto stand_joints = stand_cfg["joint_list"].as<std::vector<std::string>>();
@@ -189,6 +195,13 @@ bool AnkleIdentifierModule::LoadStartupPoseTargets() {
   for (size_t i = 0; i < stand_joints.size(); ++i) {
     startup_target_positions_[stand_joints[i]] = stand_init[i];
   }
+  AIMRT_INFO(
+      "Startup pose mode: stand. Key targets: left_knee_pitch={:.3f}, right_knee_pitch={:.3f}, "
+      "left_ankle_pitch={:.3f}, right_ankle_pitch={:.3f}",
+      startup_target_positions_["left_knee_pitch_joint"],
+      startup_target_positions_["right_knee_pitch_joint"],
+      startup_target_positions_["left_ankle_pitch_joint"],
+      startup_target_positions_["right_ankle_pitch_joint"]);
   return true;
 }
 
@@ -358,7 +371,20 @@ bool AnkleIdentifierModule::TryCaptureStableBaseline() {
                 latest_imu_.angular_velocity.z * latest_imu_.angular_velocity.z);
   const bool joint_stable = max_joint_vel <= startup_joint_vel_threshold_;
   const bool imu_stable = !use_imu_ || gyro_norm <= startup_gyro_threshold_;
-  const bool stable_now = joint_stable && imu_stable;
+  double max_target_error = 0.0;
+  bool target_reached = true;
+  if (startup_pose_mode_ != StartupPoseMode::kCurrent) {
+    for (const auto& [joint_name, target_position] : startup_target_positions_) {
+      const auto snapshot_it = latest_joint_state_.find(joint_name);
+      if (snapshot_it == latest_joint_state_.end()) continue;
+      const double abs_error = std::abs(snapshot_it->second.position - target_position);
+      max_target_error = std::max(max_target_error, abs_error);
+      if (abs_error > startup_target_pos_threshold_) {
+        target_reached = false;
+      }
+    }
+  }
+  const bool stable_now = joint_stable && imu_stable && target_reached;
   const auto now = std::chrono::steady_clock::now();
 
   if (!stable_now) {
@@ -367,9 +393,10 @@ bool AnkleIdentifierModule::TryCaptureStableBaseline() {
     if (unstable_count++ % 1000 == 0) {
       AIMRT_WARN(
           "NOT stable (count={}): joint_vel={:.5f} (thr={:.5f}), gyro_norm={:.5f} (thr={:.5f}), "
-          "joint_ok={}, imu_ok={}",
+          "target_error={:.5f} (thr={:.5f}), joint_ok={}, imu_ok={}, target_ok={}",
           unstable_count, max_joint_vel, startup_joint_vel_threshold_, gyro_norm,
-          startup_gyro_threshold_, joint_stable, imu_stable);
+          startup_gyro_threshold_, max_target_error, startup_target_pos_threshold_, joint_stable,
+          imu_stable, target_reached);
     }
     return false;
   }
@@ -378,8 +405,8 @@ bool AnkleIdentifierModule::TryCaptureStableBaseline() {
     startup_stable_since_ = now;
     AIMRT_INFO(
         "Startup settle entered. Waiting {:.3f}s stable window before baseline capture. "
-        "joint_vel={:.5f}, gyro_norm={:.5f}",
-        startup_stable_sec_, max_joint_vel, gyro_norm);
+        "joint_vel={:.5f}, gyro_norm={:.5f}, target_error={:.5f}",
+        startup_stable_sec_, max_joint_vel, gyro_norm, max_target_error);
     return false;
   }
 
@@ -394,8 +421,8 @@ bool AnkleIdentifierModule::TryCaptureStableBaseline() {
   baseline_captured_.store(true);
   AIMRT_INFO(
       "Baseline captured after startup settle. Test joint: {}, coupled joint: {}, "
-      "joint_vel={:.5f}, gyro_norm={:.5f}",
-      primary_joint_, coupled_joint_, max_joint_vel, gyro_norm);
+      "joint_vel={:.5f}, gyro_norm={:.5f}, target_error={:.5f}",
+      primary_joint_, coupled_joint_, max_joint_vel, gyro_norm, max_target_error);
   return true;
 }
 
