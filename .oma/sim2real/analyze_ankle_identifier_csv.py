@@ -8,7 +8,54 @@ import statistics
 from pathlib import Path
 
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+OMA_DIR = SCRIPT_DIR.parent
+REPO_ROOT = OMA_DIR.parent
+
+
+def resolve_existing_path(path, fallback_candidates=None):
+    candidates = []
+    if path.is_absolute():
+        candidates.append(path)
+    else:
+        candidates.extend(
+            [
+                path,
+                REPO_ROOT / path,
+                SCRIPT_DIR / path,
+                OMA_DIR / path,
+            ]
+        )
+    if fallback_candidates:
+        candidates.extend(fallback_candidates)
+
+    seen = set()
+    unique_candidates = []
+    for candidate in candidates:
+        resolved_key = str(candidate)
+        if resolved_key in seen:
+            continue
+        seen.add(resolved_key)
+        unique_candidates.append(candidate)
+        if candidate.exists():
+            return candidate
+
+    checked = "\n  - ".join(str(candidate) for candidate in unique_candidates)
+    raise FileNotFoundError(f"Could not find required file. Checked:\n  - {checked}")
+
+
+def resolve_deploy_info_path(deploy_info_path):
+    return resolve_existing_path(
+        deploy_info_path,
+        fallback_candidates=[
+            OMA_DIR / "deploy_info.json",
+            REPO_ROOT / ".oma" / "deploy_info.json",
+        ],
+    )
+
+
 def load_rows(csv_path):
+    csv_path = resolve_existing_path(csv_path)
     rows = []
     with open(csv_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -322,6 +369,7 @@ def summarize_numeric_dicts(items, fields):
 
 
 def load_timing_context(deploy_info_path):
+    deploy_info_path = resolve_deploy_info_path(deploy_info_path)
     with open(deploy_info_path, "r", encoding="utf-8") as f:
         deploy_info = json.load(f)
 
