@@ -151,6 +151,149 @@ def estimate_decay_metrics(times, error_values, first_cross_time):
     return decay_ratio, damping_ratio
 
 
+def ringdown_same_sign_peaks(times, error_values, min_peak_abs, min_peak_interval_sec):
+    extrema = find_local_extrema(times, error_values)
+    candidates = []
+    for sign_name, sign in (("positive", 1.0), ("negative", -1.0)):
+        raw_peaks = [
+            (t, abs(v))
+            for t, v in extrema
+            if sign * v > 0.0 and abs(v) >= min_peak_abs
+        ]
+        peaks = []
+        for t, amp in raw_peaks:
+            if not peaks or t - peaks[-1][0] >= min_peak_interval_sec:
+                peaks.append((t, amp))
+            elif amp > peaks[-1][1]:
+                peaks[-1] = (t, amp)
+        if len(peaks) < 2:
+            continue
+        log_decrements = []
+        periods = []
+        for (t0, a0), (t1, a1) in zip(peaks, peaks[1:]):
+            if t1 <= t0 or a0 <= 1e-9 or a1 <= 1e-9:
+                continue
+            periods.append(t1 - t0)
+            if a1 < a0:
+                log_decrements.append(math.log(a0 / a1))
+        candidates.append(
+            {
+                "sign": sign_name,
+                "peaks": peaks,
+                "log_decrements": log_decrements,
+                "periods": periods,
+            }
+        )
+
+    if not candidates:
+        return None
+
+    # Prefer the polarity that yields the most valid decreasing peak pairs.
+    # Tie-break by the first same-sign peak amplitude.
+    candidates.sort(
+        key=lambda item: (
+            len(item["log_decrements"]),
+            item["peaks"][0][1] if item["peaks"] else 0.0,
+        ),
+        reverse=True,
+    )
+    return candidates[0]
+
+
+def first_settling_time_from_zero(times, values, band):
+    if not times:
+        return None
+    deviations = [abs(v) for v in values]
+    for i in range(len(times)):
+        if all(dev <= band for dev in deviations[i:]):
+            return times[i]
+    return None
+
+
+def summarize_step_ringdown(rows):
+    phases = split_by_phase(rows)
+    pre_rows = phases.get("pre_hold", [])
+    active_rows = phases.get("active", [])
+    post_rows = phases.get("post_hold", [])
+    if not pre_rows or not active_rows or not post_rows:
+        return {
+            "ringdown_valid": False,
+            "ringdown_invalid_reason": "missing_pre_active_or_post_rows",
+        }
+
+    pre_target = mean([r["target_primary"] for r in pre_rows])
+    active_target = mean([r["target_primary"] for r in active_rows])
+    command_step = active_target - pre_target
+    step_size = abs(command_step)
+    if step_size <= 1e-9:
+        return {
+            "ringdown_valid": False,
+            "ringdown_invalid_reason": "zero_command_step",
+            "ringdown_command_step": command_step,
+        }
+
+    t0 = post_rows[0]["time_sec"]
+    times = [r["time_sec"] - t0 for r in post_rows]
+    errors = [r["actual_primary"] - r["target_primary"] for r in post_rows]
+    max_abs_error = max_abs(errors)
+    overshoot_ratio = max_abs_error / step_size
+    settling_band = max(0.02 * step_size, 1e-6)
+    settling = first_settling_time_from_zero(times, errors, settling_band)
+
+    min_peak_interval_sec = 1.0 / 30.0
+    peak_info = ringdown_same_sign_peaks(
+        times,
+        errors,
+        min_peak_abs=settling_band,
+        min_peak_interval_sec=min_peak_interval_sec,
+    )
+    peak_count = len(peak_info["peaks"]) if peak_info else 0
+    valid_log_decrements = peak_info["log_decrements"] if peak_info else []
+    periods = peak_info["periods"] if peak_info else []
+
+    log_decrement_delta = mean(valid_log_decrements) if valid_log_decrements else None
+    zeta_step = None
+    if log_decrement_delta is not None:
+        zeta_step = log_decrement_delta / math.sqrt((2.0 * math.pi) ** 2 + log_decrement_delta**2)
+
+    ringdown_freq_hz = None
+    if periods:
+        ringdown_freq_hz = 1.0 / mean(periods)
+
+    f_n_closed_loop_hz = None
+    if ringdown_freq_hz is not None and zeta_step is not None and zeta_step < 1.0:
+        f_n_closed_loop_hz = ringdown_freq_hz / math.sqrt(max(1e-12, 1.0 - zeta_step**2))
+
+    invalid_reason = None
+    if peak_count < 2:
+        invalid_reason = "same_sign_peak_count_lt_2"
+    elif not valid_log_decrements:
+        invalid_reason = "no_decreasing_same_sign_peak_pairs"
+
+    return {
+        "ringdown_valid": invalid_reason is None,
+        "ringdown_invalid_reason": invalid_reason,
+        "ringdown_command_step": command_step,
+        "ringdown_step_amplitude_rad": step_size,
+        "ringdown_peak_polarity": peak_info["sign"] if peak_info else None,
+        "ringdown_peak_count": peak_count,
+        "ringdown_valid_log_decrement_pair_count": len(valid_log_decrements),
+        "log_decrement_delta": log_decrement_delta,
+        "zeta_step": zeta_step,
+        "ringdown_freq_hz": ringdown_freq_hz,
+        "f_n_closed_loop_hz": f_n_closed_loop_hz,
+        "max_abs_overshoot": max_abs_error,
+        "ringdown_overshoot_ratio": overshoot_ratio,
+        "settling_threshold_rad": settling_band,
+        "settling_time_ms": settling * 1000.0 if settling is not None else None,
+        "post_hold_duration_sec": times[-1] if times else None,
+        "ringdown_min_peak_interval_sec": min_peak_interval_sec,
+        "ringdown_min_peak_abs": settling_band,
+        "ringdown_first_peak_time_sec": peak_info["peaks"][0][0] if peak_info else None,
+        "ringdown_first_peak_abs_error": peak_info["peaks"][0][1] if peak_info else None,
+    }
+
+
 def classify_response(overshoot, zero_crossing_count, settling_time_sec, tracking_ratio):
     if tracking_ratio is None:
         return "unknown"
@@ -472,6 +615,42 @@ def print_step_summary(summary):
     print(f"  coupled_peak_effort: {summary['coupled_peak_effort']:.6f}")
 
 
+def print_step_ringdown_summary(summary):
+    print("  Ringdown after active->post release:")
+    print(f"    valid: {summary['ringdown_valid']}")
+    if summary.get("ringdown_invalid_reason"):
+        print(f"    invalid_reason: {summary['ringdown_invalid_reason']}")
+    if summary.get("ringdown_command_step") is not None:
+        print(f"    command_step: {summary['ringdown_command_step']:.6f}")
+    if summary.get("ringdown_step_amplitude_rad") is not None:
+        print(f"    step_amplitude_rad: {summary['ringdown_step_amplitude_rad']:.6f}")
+    if summary.get("ringdown_peak_polarity") is not None:
+        print(f"    peak_polarity: {summary['ringdown_peak_polarity']}")
+    print(f"    peak_count_after_step: {summary.get('ringdown_peak_count', 0)}")
+    print(
+        "    valid_log_decrement_pair_count: "
+        f"{summary.get('ringdown_valid_log_decrement_pair_count', 0)}"
+    )
+    if summary.get("log_decrement_delta") is not None:
+        print(f"    log_decrement_delta: {summary['log_decrement_delta']:.6f}")
+    if summary.get("zeta_step") is not None:
+        print(f"    zeta_step: {summary['zeta_step']:.6f}")
+    if summary.get("ringdown_freq_hz") is not None:
+        print(f"    ringdown_freq_hz: {summary['ringdown_freq_hz']:.6f}")
+    if summary.get("f_n_closed_loop_hz") is not None:
+        print(f"    f_n_closed_loop_hz: {summary['f_n_closed_loop_hz']:.6f}")
+    if summary.get("max_abs_overshoot") is not None:
+        print(f"    max_abs_overshoot: {summary['max_abs_overshoot']:.6f}")
+    if summary.get("ringdown_overshoot_ratio") is not None:
+        print(f"    overshoot_ratio: {summary['ringdown_overshoot_ratio']:.6f}")
+    if summary.get("settling_threshold_rad") is not None:
+        print(f"    settling_threshold_rad: {summary['settling_threshold_rad']:.6f}")
+    if summary.get("settling_time_ms") is not None:
+        print(f"    settling_time_ms: {summary['settling_time_ms']:.3f}")
+    else:
+        print("    settling_time_ms: not_settled_within_post_hold")
+
+
 def print_sine_summary(summary):
     print("Mode: sine")
     print(f"  target_amplitude: {summary['target_amplitude']:.6f}")
@@ -494,6 +673,8 @@ def main():
         default=Path(".oma/deploy_info.json"),
         help="Path to deploy_info.json used to derive control_hz and cycle_time",
     )
+    parser.add_argument("--out-json", type=Path, default=None, help="Optional path to write JSON metrics.")
+    parser.add_argument("--out-csv", type=Path, default=None, help="Optional path to write per-iteration CSV metrics.")
     args = parser.parse_args()
 
     rows = load_rows(args.csv_path)
@@ -507,14 +688,29 @@ def main():
     print_timing_context(timing_context)
 
     mode = infer_mode(rows)
+    output = {
+        "csv_path": str(args.csv_path),
+        "mode": mode,
+        "sample_count": len(rows),
+        "primary_joint": rows[0]["primary_joint"],
+        "coupled_joint": rows[0]["coupled_joint"],
+        "iterations": sorted({r["iteration"] for r in rows}),
+        "iterations_summary": [],
+    }
     if mode == "step":
         iteration_groups = group_by_iteration(rows)
         iteration_summaries = []
+        ringdown_summaries = []
         for iteration in sorted(iteration_groups):
             summary = summarize_step(iteration_groups[iteration], timing_context)
+            ringdown_summary = summarize_step_ringdown(iteration_groups[iteration])
+            summary.update(ringdown_summary)
             iteration_summaries.append(summary)
+            ringdown_summaries.append(ringdown_summary)
+            output["iterations_summary"].append({"iteration": iteration, **summary})
             print(f"Iteration {iteration}:")
             print_step_summary(summary)
+            print_step_ringdown_summary(ringdown_summary)
 
         aggregate_fields = [
             "command_step",
@@ -537,15 +733,33 @@ def main():
             "oscillation_frequency_hz",
             "decay_ratio",
             "estimated_damping_ratio",
+            "ringdown_command_step",
+            "ringdown_step_amplitude_rad",
+            "ringdown_peak_count",
+            "ringdown_valid_log_decrement_pair_count",
+            "log_decrement_delta",
+            "zeta_step",
+            "ringdown_freq_hz",
+            "f_n_closed_loop_hz",
+            "max_abs_overshoot",
+            "ringdown_overshoot_ratio",
+            "settling_threshold_rad",
+            "settling_time_ms",
+            "post_hold_duration_sec",
+            "ringdown_min_peak_interval_sec",
+            "ringdown_min_peak_abs",
             "primary_peak_velocity",
             "coupled_peak_velocity",
             "primary_peak_effort",
             "coupled_peak_effort",
         ]
         aggregate = summarize_numeric_dicts(iteration_summaries, aggregate_fields)
+        output["aggregate"] = aggregate
         response_classes = [summary["response_class"] for summary in iteration_summaries]
         rise_statuses = [summary["rise_time_status"] for summary in iteration_summaries]
         peak_statuses = [summary["peak_time_status"] for summary in iteration_summaries]
+        ringdown_valid_flags = [summary["ringdown_valid"] for summary in iteration_summaries]
+        ringdown_invalid_reasons = [summary["ringdown_invalid_reason"] for summary in iteration_summaries]
 
         print("Aggregate across iterations:")
         for field in aggregate_fields:
@@ -556,10 +770,29 @@ def main():
         print(f"  response_classes: {response_classes}")
         print(f"  rise_time_statuses: {rise_statuses}")
         print(f"  peak_time_statuses: {peak_statuses}")
+        print(f"  ringdown_valid_flags: {ringdown_valid_flags}")
+        print(f"  ringdown_invalid_reasons: {ringdown_invalid_reasons}")
     elif mode == "sine":
-        print_sine_summary(summarize_sine(rows))
+        sine_summary = summarize_sine(rows)
+        output["summary"] = sine_summary
+        print_sine_summary(sine_summary)
     else:
         print("Mode: unknown")
+
+    if args.out_json:
+        args.out_json.parent.mkdir(parents=True, exist_ok=True)
+        with open(args.out_json, "w", encoding="utf-8") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
+        print(f"Wrote JSON metrics: {args.out_json}")
+
+    if args.out_csv and output["iterations_summary"]:
+        args.out_csv.parent.mkdir(parents=True, exist_ok=True)
+        fieldnames = sorted({key for item in output["iterations_summary"] for key in item})
+        with open(args.out_csv, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(output["iterations_summary"])
+        print(f"Wrote CSV metrics: {args.out_csv}")
 
 
 if __name__ == "__main__":

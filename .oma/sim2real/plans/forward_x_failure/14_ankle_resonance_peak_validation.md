@@ -168,6 +168,122 @@ omega_n = omega_d / sqrt(1 - zeta^2)
 f_n = omega_n / (2*pi)
 ```
 
+### Step Ringdown 执行链路
+
+当前推荐先做 `right_ankle_roll`，`kp=40`，`kd=0.8`，`step_amplitude=0.003 rad`。配置已由下面命令写入 `ankle_identifier.yaml`：
+
+```bash
+python .oma/sim2real/set_ankle_identifier_config.py \
+  --side right \
+  --axis roll \
+  --mode step \
+  --startup-pose-mode stand \
+  --publish-rate-hz 1000 \
+  --pre-hold-sec 3.0 \
+  --active-sec 0.5 \
+  --post-hold-sec 4.0 \
+  --repeat-count 1 \
+  --hold-target-after-active false \
+  --kp 40 \
+  --kd 0.8 \
+  --step-amplitude 0.003 \
+  --csv-path /home/robot/F1_infer/F1/test_logs/data_csv/ankle_step/right_roll_step_kp40_kd0.8_amp0.003_real.csv
+```
+
+服务器上执行顺序：
+
+```bash
+cd /home/robot/F1_infer/F1/src/install/linux/bin
+
+# 先把 CSV 路径切到 sim，避免覆盖 real 日志。
+python /home/robot/F1_infer/F1/.oma/sim2real/set_ankle_identifier_config.py \
+  --side right \
+  --axis roll \
+  --mode step \
+  --startup-pose-mode stand \
+  --publish-rate-hz 1000 \
+  --pre-hold-sec 3.0 \
+  --active-sec 0.5 \
+  --post-hold-sec 4.0 \
+  --repeat-count 1 \
+  --hold-target-after-active false \
+  --kp 40 \
+  --kd 0.8 \
+  --step-amplitude 0.003 \
+  --csv-path /home/robot/F1_infer/F1/test_logs/data_csv/ankle_step/right_roll_step_kp40_kd0.8_amp0.003_sim.csv
+
+# sim dry-run：确认字段、相位、方向、CSV 写入。
+./run_sim_identifier.sh
+
+# sim 检查通过后，把 CSV 路径切到 real。
+python /home/robot/F1_infer/F1/.oma/sim2real/set_ankle_identifier_config.py \
+  --side right \
+  --axis roll \
+  --mode step \
+  --startup-pose-mode stand \
+  --publish-rate-hz 1000 \
+  --pre-hold-sec 3.0 \
+  --active-sec 0.5 \
+  --post-hold-sec 4.0 \
+  --repeat-count 1 \
+  --hold-target-after-active false \
+  --kp 40 \
+  --kd 0.8 \
+  --step-amplitude 0.003 \
+  --csv-path /home/robot/F1_infer/F1/test_logs/data_csv/ankle_step/right_roll_step_kp40_kd0.8_amp0.003_real.csv
+
+# real 空载/支撑或悬挂：只启用 DcuDriverModule + AnkleIdentifierModule，
+# 不启用 ControlModule/JoyStickModule，避免 RL 控制和 step 注入同时发 /joint_cmd。
+./run_identifier.sh
+```
+
+注意：当前仓库中 `run_identifier.sh` 对应 `cfg/x1_cfg_identifier.yaml`，只加载：
+
+```text
+DcuDriverModule
+AnkleIdentifierModule
+```
+
+而 `run_sim_identifier.sh` 对应 `cfg/x1_cfg_sim_identifier.yaml`，加载：
+
+```text
+SimModule
+AnkleIdentifierModule
+```
+
+离线分析脚本：
+
+```bash
+python .oma/sim2real/analyze_ankle_identifier_csv.py \
+  /home/robot/F1_infer/F1/test_logs/data_csv/ankle_step/right_roll_step_kp40_kd0.8_amp0.003_real.csv \
+  --out-json /home/robot/F1_infer/F1/test_logs/data_csv/ankle_step/right_roll_step_kp40_kd0.8_amp0.003_real.metrics.json \
+  --out-csv /home/robot/F1_infer/F1/test_logs/data_csv/ankle_step/right_roll_step_kp40_kd0.8_amp0.003_real.metrics.csv
+```
+
+该脚本现在对 `active -> post_hold` 释放后的 `post_hold` 窗口计算：
+
+```text
+e(t) = actual_primary(t) - target_primary(t)
+log_decrement_delta
+zeta_step
+ringdown_freq_hz
+f_n_closed_loop_hz
+max_abs_overshoot
+ringdown_overshoot_ratio
+settling_time_ms
+ringdown_peak_count
+ringdown_valid_log_decrement_pair_count
+```
+
+有效性要求：
+
+```text
+ringdown_peak_count >= 2
+ringdown_valid_log_decrement_pair_count >= 1
+```
+
+如果不满足，脚本会把 `ringdown_valid=false` 并输出 `ringdown_invalid_reason`，该条 CSV 不用于 `zeta_step` 和 `f_n_closed_loop_hz` 结论。
+
 ### 从 sine sweep 提取
 
 对每个频点计算：

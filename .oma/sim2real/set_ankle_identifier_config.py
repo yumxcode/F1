@@ -66,8 +66,15 @@ def main() -> int:
     parser.add_argument("--side", choices=["left", "right"], required=True)
     parser.add_argument("--axis", choices=["pitch", "roll"], required=True)
     parser.add_argument("--mode", choices=["step", "sine"], default="step")
+    parser.add_argument("--startup-pose-mode", choices=["current", "zero", "stand"], default=None)
     parser.add_argument("--contact", choices=["air", "ground"], default=None)
     parser.add_argument("--tag", default=None)
+    parser.add_argument("--publish-rate-hz", type=float, default=None)
+    parser.add_argument("--pre-hold-sec", type=float, default=None)
+    parser.add_argument("--active-sec", type=float, default=None)
+    parser.add_argument("--post-hold-sec", type=float, default=None)
+    parser.add_argument("--repeat-count", type=int, default=None)
+    parser.add_argument("--hold-target-after-active", choices=["true", "false"], default=None)
     parser.add_argument("--kp", type=float, required=True)
     parser.add_argument("--kd", type=float, required=True)
     parser.add_argument("--step-amplitude", type=float, default=0.015)
@@ -95,6 +102,18 @@ def main() -> int:
         "test_kd": args.kd,
         "csv_path": csv_path,
     }
+    optional_updates = {
+        "startup_pose_mode": args.startup_pose_mode,
+        "publish_rate_hz": args.publish_rate_hz,
+        "pre_hold_sec": args.pre_hold_sec,
+        "active_sec": args.active_sec,
+        "post_hold_sec": args.post_hold_sec,
+        "repeat_count": args.repeat_count,
+        "hold_target_after_active": (
+            None if args.hold_target_after_active is None else args.hold_target_after_active
+        ),
+    }
+    updates.update({key: value for key, value in optional_updates.items() if value is not None})
 
     updated_paths = []
     for path in dict.fromkeys(candidate_paths()):
