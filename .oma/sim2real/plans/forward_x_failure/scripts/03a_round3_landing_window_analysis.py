@@ -307,6 +307,7 @@ def attach_fk_metrics(rows):
         rows[0][f"{side}_foot_vz"] = 0.0
         rows[0][f"{side}_foot_vx"] = 0.0
         rows[0][f"{side}_rel_height"] = rows[0][f"{side}_foot_z"] - rows[0][f"{'right' if side == 'left' else 'left'}_foot_z"]
+        rows[0][f"{side}_foot_rel_vz"] = 0.0
         rows[0][f"{side}_flat_error_rate"] = 0.0
         for idx in range(1, len(rows)):
             prev_flat_err = rows[idx - 1][f"{side}_foot_flat_error"]
@@ -318,6 +319,11 @@ def attach_fk_metrics(rows):
             rows[idx][f"{side}_foot_vx"] = (curr_x - prev_x) / dt
             rows[idx][f"{side}_foot_vz"] = (curr_z - prev_z) / dt
             rows[idx][f"{side}_rel_height"] = rows[idx][f"{side}_foot_z"] - rows[idx][f"{'right' if side == 'left' else 'left'}_foot_z"]
+            # foot_rel_vz = d(rel_height)/dt: base-z motion cancels in the difference,
+            # giving a velocity estimate free from the fixed BASE_Z approximation.
+            rows[idx][f"{side}_foot_rel_vz"] = (
+                rows[idx][f"{side}_rel_height"] - rows[idx - 1][f"{side}_rel_height"]
+            ) / dt
             rows[idx][f"{side}_flat_error_rate"] = (curr_flat_err - prev_flat_err) / dt
             prev_x = curr_x
             prev_z = curr_z
@@ -346,8 +352,8 @@ def holds_contact_for_frames(rows, idx, side, hold_frames):
 
 def touchdown_geom_ok(rows, idx, side):
     row = rows[idx]
-    prev_vz = rows[max(idx - 1, 0)][f"{side}_foot_vz"]
-    curr_vz = row[f"{side}_foot_vz"]
+    prev_vz = rows[max(idx - 1, 0)][f"{side}_foot_rel_vz"]
+    curr_vz = row[f"{side}_foot_rel_vz"]
     rel_height = row[f"{side}_rel_height"]
     return (
         rel_height <= TOUCHDOWN_MAX_REL_HEIGHT_M
@@ -359,7 +365,7 @@ def touchdown_geom_ok(rows, idx, side):
 
 def first_contact_geom_ok(rows, idx, side):
     row = rows[idx]
-    prev_vz = rows[max(idx - 1, 0)][f"{side}_foot_vz"]
+    prev_vz = rows[max(idx - 1, 0)][f"{side}_foot_rel_vz"]
     rel_height = row[f"{side}_rel_height"]
     return (
         rel_height <= TOUCHDOWN_MAX_REL_HEIGHT_M
@@ -371,7 +377,7 @@ def first_contact_geom_ok(rows, idx, side):
 def stable_touchdown_geom_ok(rows, idx, side):
     row = rows[idx]
     rel_height = row[f"{side}_rel_height"]
-    vz = row[f"{side}_foot_vz"]
+    vz = row[f"{side}_foot_rel_vz"]
     vx = row[f"{side}_foot_vx"]
     flat_err_rate = row[f"{side}_flat_error_rate"]
     return (
@@ -399,7 +405,7 @@ def refine_touchdown_index(rows, candidate_idx, side):
         contact_hold = holds_contact(rows, idx, side)
         geom_ok = touchdown_geom_ok(rows, idx, side)
         rel_height = row[f"{side}_rel_height"]
-        curr_abs_vz = abs(row[f"{side}_foot_vz"])
+        curr_abs_vz = abs(row[f"{side}_foot_rel_vz"])
         score = (
             0 if geom_ok else 1,
             0 if contact and contact_hold else 1,
@@ -456,7 +462,7 @@ def find_stable_touchdown_index(rows, first_contact_idx, candidate_idx, side):
         geom_ok = stable_touchdown_geom_ok(rows, idx, side)
         contact_hold = holds_contact_for_frames(rows, idx, side, STABLE_TOUCHDOWN_HOLD_FRAMES)
         rel_height = abs(row[f"{side}_rel_height"])
-        vz = abs(row[f"{side}_foot_vz"])
+        vz = abs(row[f"{side}_foot_rel_vz"])
         flat_rate = abs(row[f"{side}_flat_error_rate"])
         score = (
             0 if geom_ok else 1,
@@ -505,7 +511,7 @@ def choose_stable_kinematic_touchdown_index(rows, candidate_idx, side):
     for idx in range(candidate_idx, end_idx + 1):
         row = rows[idx]
         rel_height = row[f"{side}_rel_height"]
-        vz = row[f"{side}_foot_vz"]
+        vz = row[f"{side}_foot_rel_vz"]
         vx = row[f"{side}_foot_vx"]
         flat_rate = row[f"{side}_flat_error_rate"]
         stable = (
@@ -539,8 +545,8 @@ def detect_touchdowns_from_kinematics(rows, side):
         row = rows[idx]
         rel_height = row[f"{side}_rel_height"]
         prev_rel = rows[idx - 1][f"{side}_rel_height"]
-        vz = row[f"{side}_foot_vz"]
-        prev_vz = rows[idx - 1][f"{side}_foot_vz"]
+        vz = row[f"{side}_foot_rel_vz"]
+        prev_vz = rows[idx - 1][f"{side}_foot_rel_vz"]
 
         if row["time_sec"] - last_event_time < KIN_SIDE_REFRACTORY_SEC:
             continue
@@ -560,6 +566,7 @@ def detect_touchdowns_from_kinematics(rows, side):
             settling = abs(vz) <= KIN_SETTLE_VEL_MPS or (
                 prev_vz < -KIN_DESCENT_VEL_MPS and vz >= -KIN_SETTLE_VEL_MPS
             )
+
             if descending and low_enough and settling:
                 stable_idx = choose_stable_kinematic_touchdown_index(rows, idx, side)
                 if (
@@ -616,8 +623,8 @@ def detect_touchdowns_from_geometry(rows, side):
             continue
         if not first_contact_geom_ok(rows, idx, side):
             continue
-        prev_vz = rows[idx - 1][f"{side}_foot_vz"]
-        curr_vz = rows[idx][f"{side}_foot_vz"]
+        prev_vz = rows[idx - 1][f"{side}_foot_rel_vz"]
+        curr_vz = rows[idx][f"{side}_foot_rel_vz"]
         if prev_vz <= -TOUCHDOWN_DESCENT_VEL_MPS and curr_vz >= -TOUCHDOWN_SETTLE_VEL_MPS:
             stable_idx = find_stable_touchdown_index(rows, idx, idx, side)
             events.append(

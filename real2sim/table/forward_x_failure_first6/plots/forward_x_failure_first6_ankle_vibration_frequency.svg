@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="520" viewBox="0 0 940 520">
+<style>
+text{font-family:Arial,Helvetica,sans-serif;fill:#18212f}
+.title{font-size:25px;font-weight:700}
+.subtitle{font-size:13px;fill:#526174}
+.section{font-size:16px;font-weight:700}
+.label{font-size:11px;fill:#334155}
+.small{font-size:10px;fill:#526174}
+.grid{stroke:#d8dee8;stroke-width:1}
+.real{fill:#2563eb}
+.sim{fill:#dc2626}
+.bg{fill:#f8fafc}
+.panel{fill:#ffffff;stroke:#d8dee8;stroke-width:1}
+</style>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="34" y="42" class="title">Ankle true vibration frequency from full logs</text>
+<text x="34" y="66" class="subtitle">Signal: delay-aligned residual. Target PSD is checked at the residual peak; closed_loop_dominant means residual/target power >= 3x.</text>
+<rect x="34" y="86" width="14" height="8" class="real"/><text x="54" y="94" class="subtitle">real</text>
+<rect x="104" y="86" width="14" height="8" class="sim"/><text x="124" y="94" class="subtitle">sim</text>
+<rect x="70" y="125" width="340" height="285" class="panel"/>
+<text x="82" y="150" class="section">ankle_pitch</text>
+<line x1="115" y1="372.0" x2="390" y2="372.0" class="grid"/>
+<text x="84" y="375.0" class="small">0</text>
+<line x1="115" y1="203.4" x2="390" y2="203.4" class="grid"/>
+<text x="84" y="206.4" class="small">5</text>
+<line x1="115" y1="34.9" x2="390" y2="34.9" class="grid"/>
+<text x="84" y="37.9" class="small">10</text>
+<rect x="160.0" y="170.0" width="52.0" height="202.0" class="real"/>
+<text x="162" y="392" class="label">real</text>
+<text x="158" y="164.0" class="label">6.38</text>
+<text x="148" y="405" class="small">std 1.45</text>
+<rect x="255.0" y="191.2" width="52.0" height="180.8" class="sim"/>
+<text x="257" y="392" class="label">sim</text>
+<text x="253" y="185.2" class="label">5.71</text>
+<text x="243" y="405" class="small">std 0.01</text>
+<rect x="515" y="125" width="340" height="285" class="panel"/>
+<text x="527" y="150" class="section">ankle_roll</text>
+<line x1="560" y1="372.0" x2="835" y2="372.0" class="grid"/>
+<text x="529" y="375.0" class="small">0</text>
+<line x1="560" y1="203.4" x2="835" y2="203.4" class="grid"/>
+<text x="529" y="206.4" class="small">5</text>
+<line x1="560" y1="34.9" x2="835" y2="34.9" class="grid"/>
+<text x="529" y="37.9" class="small">10</text>
+<rect x="605.0" y="200.7" width="52.0" height="171.3" class="real"/>
+<text x="607" y="392" class="label">real</text>
+<text x="603" y="194.7" class="label">5.41</text>
+<text x="593" y="405" class="small">std 0.27</text>
+<rect x="700.0" y="174.5" width="52.0" height="197.5" class="sim"/>
+<text x="702" y="392" class="label">sim</text>
+<text x="698" y="168.5" class="label">6.24</text>
+<text x="688" y="405" class="small">std 0.69</text>
+<text x="34" y="455" class="subtitle">Per-case peaks are in real2sim/table/forward_x_failure_first6/forward_x_failure_first6_ankle_vibration_frequency_detail.csv; summary CSV is real2sim/table/forward_x_failure_first6/forward_x_failure_first6_ankle_vibration_frequency_summary.csv.</text>
+</svg>
