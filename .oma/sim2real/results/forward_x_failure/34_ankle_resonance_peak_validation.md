@@ -221,3 +221,72 @@ settling_time_ms
 ```
 
 如果 `Kp40/Kd0.8` 的 `f_n_closed_loop_hz` 落在 `5~7 Hz`，且 `Kd1.5` 显著降低 peak gain 和 settling time，则可以把当前 walking-data 近似候选升级为更强的谐振证据。
+
+## 专项阶跃实验追加记录
+
+本节用于持续追加 `analyze_ankle_identifier_csv.py` 的 step ringdown 结果。以下记录来自现场口述输出，未附原始 CSV；后续有 CSV 时应补充 `csv_path` 并保留同一表头继续追加。
+
+### 结果表
+
+记录按 `amp_rad` 分组。同一阶跃幅值内先放悬空首测，再放复测，便于后续追加触地工况并做同幅值对照。
+
+#### `amp_rad = 0.050`
+
+| 日期 | 工况 | joint | kp | kd | amp_rad | repeat | tracking_ratio | tail_tracking_ratio | active_overshoot_ratio | rise_time_sec | peak_time_sec | response_class | ringdown_valid | zeta_step | ringdown_freq_hz | f_n_closed_loop_hz | ringdown_overshoot_ratio | settling_time_ms | peak_count | valid_log_pairs | primary_peak_velocity | primary_peak_effort | 备注 |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---|
+| 2026-05-11 | 悬空 | `right_ankle_roll_joint` | 35 | 0.5 | 0.050 | 1 | 0.954175 | 1.052200 | 0.193796 | 0.039837 | 0.088973 | `single_overshoot` | true | 0.072442 | 3.453893 | 3.462991 | 1.098940 | not_settled_within_post_hold | 14 | 2 | 1.124950 | 2.527606 | 中大幅能跟踪，但释放后低阻尼振荡明显；4 s post_hold 未收敛。 |
+| 2026-05-11 | 悬空复测 | `right_ankle_roll_joint` | 35 | 0.5 | 0.050 | 1 | 0.998483 | 1.075476 | 0.264116 | 0.040554 | 0.106082 | `single_overshoot` | true | 0.089228 | 18.860629 | 18.936161 | 1.071500 | not_settled_within_post_hold | 3 | 2 | 1.178458 | 2.552674 | 0.05 rad 复测跟踪更接近 1，但 active 超调和 ringdown 频率高于首次；同幅值复测差异大，提示释放初态、摩擦/间隙或峰值检测敏感。 |
+| 2026-05-11 | 悬空复测2 | `right_ankle_roll_joint` | 35 | 0.5 | 0.050 | 1 | 0.900629 | 0.969679 | 0.166179 | 0.039229 | 0.091024 | `oscillatory_but_settling` | true | 0.092612 | 16.990164 | 17.063499 | 1.036160 | not_settled_within_post_hold | 37 | 2 | 1.153267 | 2.503776 | 0.05 rad 第二次复测 post_hold 仅 2.29 s，不完全可比；active 超调较低，但 ringdown 仍不收敛，`f_n` 接近 0.05 首次复测和 0.15 复测。 |
+
+#### `amp_rad = 0.100`
+
+| 日期 | 工况 | joint | kp | kd | amp_rad | repeat | tracking_ratio | tail_tracking_ratio | active_overshoot_ratio | rise_time_sec | peak_time_sec | response_class | ringdown_valid | zeta_step | ringdown_freq_hz | f_n_closed_loop_hz | ringdown_overshoot_ratio | settling_time_ms | peak_count | valid_log_pairs | primary_peak_velocity | primary_peak_effort | 备注 |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---|
+| 2026-05-11 | 悬空 | `right_ankle_roll_joint` | 35 | 0.5 | 0.100 | 1 | 0.948378 | 0.997384 | 0.319234 | 0.034508 | 0.092020 | `oscillatory_but_settling` | true | 0.201689 | 10.807306 | 11.034061 | 0.996620 | not_settled_within_post_hold | 3 | 2 | 2.498135 | 4.723539 | 0.1 rad 下 active 超调更大；`f_n_closed_loop_hz=11.034061 Hz`。频率较 0.05 rad 明显变化，提示非线性或峰值估计受样本影响。 |
+| 2026-05-11 | 悬空复测 | `right_ankle_roll_joint` | 35 | 0.5 | 0.100 | 1 | 0.978835 | 1.025537 | 0.368967 | 0.035150 | 0.090961 | `oscillatory_but_settling` | true | 0.245432 | 27.042672 | 27.895905 | 0.992700 | not_settled_within_post_hold | 97 | 2 | 2.501441 | 4.866710 | 0.1 rad 复测 active 跟踪略好但超调更大；`peak_count=97`、有效递减峰对仅 2，ringdown 频率接近 0.15 rad 结果，仍不能视为稳定单一模态。 |
+| 2026-05-11 | 悬空复测2 | `right_ankle_roll_joint` | 35 | 0.5 | 0.100 | 1 | 0.963795 | 1.013352 | 0.346982 | 0.034139 | 0.092976 | `oscillatory_but_settling` | true | 0.166430 | 14.561622 | 14.767582 | 0.992700 | not_settled_within_post_hold | 4 | 3 | 2.484668 | 4.795113 | 0.1 rad 第二次复测 active 指标接近前两次，ringdown 频率回到约 14.8 Hz；峰值数量较少、有效递减峰对 3，比 97 峰那次更干净。 |
+
+#### `amp_rad = 0.150`
+
+| 日期 | 工况 | joint | kp | kd | amp_rad | repeat | tracking_ratio | tail_tracking_ratio | active_overshoot_ratio | rise_time_sec | peak_time_sec | response_class | ringdown_valid | zeta_step | ringdown_freq_hz | f_n_closed_loop_hz | ringdown_overshoot_ratio | settling_time_ms | peak_count | valid_log_pairs | primary_peak_velocity | primary_peak_effort | 备注 |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---|
+| 2026-05-11 | 悬空 | `right_ankle_roll_joint` | 35 | 0.5 | 0.150 | 1 | 0.918028 | 0.960157 | 0.354617 | 0.033454 | 0.091262 | `sustained_oscillation` | true | 0.169698 | 27.143251 | 27.542726 | 0.974387 | 3985.041 | 108 | 3 | 3.827732 | 7.153489 | 0.15 rad 下 active 超调继续增大；post_hold 约 4 s 才贴近阈值，`peak_count=108` 但有效递减峰对仅 3，说明有大量小峰/噪声或高频折返参与峰值检测。 |
+| 2026-05-11 | 悬空复测 | `right_ankle_roll_joint` | 35 | 0.5 | 0.150 | 1 | 0.921648 | 0.964132 | 0.357078 | 0.034237 | 0.099110 | `sustained_oscillation` | true | 0.125624 | 16.130073 | 16.258876 | 0.983540 | 278.026 | 5 | 4 | 3.847833 | 7.058158 | 0.15 rad 复测 active 指标与首次接近，但 ringdown 频率从约 27.5 Hz 变为约 16.3 Hz，峰值数量从 108 降到 5；复测的峰值衰减估计更干净，但仍显示释放超调接近整步幅。 |
+| 2026-05-11 | 悬空复测2 | `right_ankle_roll_joint` | 35 | 0.5 | 0.150 | 1 | 0.922447 | 0.964277 | 0.357224 | 0.034456 | 0.088048 | `sustained_oscillation` | true | 0.125624 | 15.155821 | 15.276844 | 0.983540 | 287.913 | 5 | 4 | 3.829759 | 7.105780 | 0.15 rad 第二次复测与上一次 0.15 复测高度一致；post_hold 约 2.25 s，`f_n` 约 15.3 Hz，仍有接近整步幅的释放超调。 |
+
+### 当前解读
+
+- `0.050 rad`：三次 tracking 在 `0.900629~0.998483`，active 超调在 `0.166179~0.264116`，均未在 post_hold 内稳定收敛。首次 `f_n=3.462991 Hz`，两次复测为 `18.936161 / 17.063499 Hz`，说明该幅值下频率估计对释放初态、摩擦/间隙或峰值检测较敏感。
+- `0.100 rad`：三次 tracking 在 `0.948378~0.978835`，active 超调稳定偏高：`0.319234 / 0.368967 / 0.346982`，且均未在 post_hold 内稳定收敛。`f_n` 在 `11.034061 / 27.895905 / 14.767582 Hz` 间变化，active 段超调结论稳定，释放段频率估计不稳定。
+- `0.150 rad`：三次 tracking 很接近：`0.918028 / 0.921648 / 0.922447`，active 超调也很接近：`0.354617 / 0.357078 / 0.357224`。两次复测的 `f_n=16.258876 / 15.276844 Hz`、`zeta_step=0.125624`、`peak_count=5`、`valid_log_pairs=4` 基本一致，比首次 `27.542726 Hz, peak_count=108` 更干净。
+- `0.003 rad` 小信号几乎不跟踪，而 `0.05/0.10/0.15 rad` 能接近目标，支持 `right_ankle_roll_joint` 存在小信号死区/静摩擦/间隙影响。
+- 同一 `kp=35,kd=0.5` 下，悬空 active 段结论明确：幅值越大，active 超调越重，`0.10/0.15 rad` 已达到约 `0.32~0.37`。释放段结论应更谨慎：频率随幅值和复测状态变化大，不能把单次 `f_n_closed_loop_hz` 当作单一线性二阶模态。
+- 后续触地工况必须按同一 `amp_rad` 小节追加，先与悬空同幅值横向比较，再判断接触约束是否改变阻尼、超调和收敛时间。
+
+### 后续追加要求
+
+后续专项实验继续追加到上方结果表，并尽量补齐：
+
+```text
+csv_path
+side / axis / kp / kd / amp_rad
+悬空或触地工况
+repeat_count / iteration_count
+zeta_step
+ringdown_freq_hz
+f_n_closed_loop_hz
+settling_time_ms
+primary_peak_effort
+```
+
+优先下一组：
+
+```text
+right_ankle_roll_joint
+触地
+amp_rad = 0.05, 0.10, 0.15
+kp = 35
+kd = 0.5
+```
+
+目标是先补齐同一 `kp/kd/amp_rad` 下的触地对照，判断接触约束是否改变 `tracking_ratio`、`active_overshoot_ratio`、`ringdown_overshoot_ratio`、`settling_time_ms` 和 `f_n_closed_loop_hz`。触地数据追加时直接写入对应 `amp_rad` 小节，工况填 `触地` 或 `触地复测`，不要与悬空结论混合收口。

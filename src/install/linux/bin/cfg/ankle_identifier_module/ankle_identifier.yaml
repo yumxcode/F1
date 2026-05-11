@@ -9,7 +9,7 @@ test_side: right
 test_axis: roll
 
 publish_rate_hz: 1000
-pre_hold_sec: 3
+pre_hold_sec: 5
 active_sec: 0.5
 post_hold_sec: 4
 repeat_count: 1
