@@ -1,6 +1,18 @@
 {
   "stage": "deploy",
   "skill": "$deploy",
-  "enteredAt": "2026-04-15T05:37:27.432Z",
-  "reason": "团队已完成训练，以本项目代码，直接进行sim2real真机部署"
+  "enteredAt": "2026-05-15T15:00:00+0800",
+  "reason": "团队已完成开发及训练，直接进入新的 sim2real 问题：自研算法高速行走不稳",
+  "status": "active",
+  "subject": "high_speed_walk_unstable",
+  "issueArchive": ".oma/sim2real/high_speed_walk_unstable_5.15/",
+  "summary": ".oma/sim2real/high_speed_walk_unstable_5.15/SUMMARY.md",
+  "checklist": ".oma/sim2real/high_speed_walk_unstable_5.15/sim2real_checklist.md",
+  "gapAnalysis": ".oma/sim2real/high_speed_walk_unstable_5.15/sim2real-gap.md",
+  "currentPlan": ".oma/sim2real/high_speed_walk_unstable_5.15/plans/round_01_high_speed_boundary_and_logging.md",
+  "previousSubject": {
+    "name": "forward_x_failure",
+    "archive": ".oma/sim2real/forward_x_failure_5.14/",
+    "status": "ended"
+  }
 }
