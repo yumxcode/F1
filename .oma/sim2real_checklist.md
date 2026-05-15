@@ -35,7 +35,7 @@
 | `sensor_and_sign_check` | completed | 确认传感器、关节顺序、符号、零位无硬错误 | 本阶段按现场基础检查执行 | [Round 1](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/round_01_field_test.md:1) |
 | `zero -> stand -> hold` | completed | 确认基础 PD 站立稳定 | 本阶段按现场基础检查执行 | [Round 1](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/round_01_field_test.md:1) |
 | `rl_idle_and_in_place_step` | completed | 确认 RL 零速/小速度下基础行为 | 本阶段按现场基础检查执行 | [Round 1](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/round_01_field_test.md:1) |
-| `ankle_kp_kd_identification` | in progress | 在改踝关节参数前做闭环辨识 | [ankle_kp_kd_identification.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/ankle_kp_kd_identification.md:1) | 触地首轮完成，但悬空工况缺失，且评价准则已修正 |
+| `ankle_kp_kd_identification` | in progress | 在改踝关节参数前做闭环辨识 | [ankle_kp_kd_identification.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/ankle_kp_kd_identification.md:1) | [35_ankle_zeta_natural_frequency_stats.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/results/forward_x_failure/35_ankle_zeta_natural_frequency_stats.md:1) |
 | `low_speed_walk` | pending | 在候选踝关节参数下验证低速直行、连续性和抖动变化 | [round_03_low_speed_walk_with_ankle_candidates.md](/Users/yumx/code/X1/agibot_x1_infer/.oma/sim2real/plans/round_03_low_speed_walk_with_ankle_candidates.md:1) | 已有草案，但必须等待 Round 2 关闭后才能执行 |
 | `lateral_and_yaw` | pending | 验证横移与转向 | 待创建 | 待更新 |
 | `disturbance_and_contact` | pending | 验证扰动和接触鲁棒性 | 待创建 | 待更新 |
@@ -83,6 +83,13 @@
     - 但仍有轻度振荡和轮次分裂，属于接近可用但未收口
   - `right pitch` 完全触地 `kd=0.5` 支路已可判定为无效方向，不应继续沿这条线加 `kp`
   - `left pitch` 与 `left roll` 仍需要继续扫描或复核工况一致性
+- 专项实验 14/34 的下一步统计已按 `t27` 口径重做：
+  - sim 数据来自 `test_logs/data_csv/sim/t27*.csv`，共 4 个文件
+  - real 数据来自 `test_logs/data_csv/t27*.csv`，共 12 个文件
+  - 该统计是 walking-data 的频域半功率近似，输出 `zeta_bandwidth` / `f_modal_candidate_hz` / `f_n_equiv_hz`，不再混用 step 实验的 `zeta_step`
+  - `40/0.8 all_ankles` real roll 组：`f_modal_candidate_hz≈2.83 Hz`，`zeta_bandwidth≈0.0517`，`f_n_equiv≈2.84 Hz`
+  - sim roll 组在 25/0.4、35/0.5、40/0.5、50/0.8 下主峰约 `2.83~2.88 Hz`，`zeta_bandwidth≈0.0254~0.0259`
+  - 后续参数判断应基于 `forward_x_failure_first6_t27_ankle_zeta_fn_detail.csv` 的 per-joint 差异，尤其 `right_ankle_roll_joint` 的 `residual_target_power_ratio` 和峰值 gain
 - `Round 3` 当前策略：
   - 已形成草案，但继续暂缓
   - 待 `Round 2` 在悬空和触地两类工况下都形成闭环结论后，再决定是否进入低速步态验证

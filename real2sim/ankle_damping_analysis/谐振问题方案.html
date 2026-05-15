@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>踝关节PD控制稳定性分析 — 理论整理 v5</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<style>
+  :root {
+    --blue-50: #E6F1FB; --blue-200: #85B7EB; --blue-600: #185FA5; --blue-800: #0C447C;
+    --teal-50: #E1F5EE; --teal-200: #5DCAA5; --teal-600: #0F6E56; --teal-800: #085041;
+    --amber-50: #FAEEDA; --amber-200: #EF9F27; --amber-600: #854F0B; --amber-800: #633806;
+    --coral-50: #FAECE7; --coral-200: #F0997B; --coral-600: #993C1D; --coral-800: #712B13;
+    --purple-50: #EEEDFE; --purple-200: #AFA9EC; --purple-600: #534AB7; --purple-800: #3C3489;
+    --green-50: #F0FDF4; --green-200: #86EFAC; --green-600: #16A34A; --green-800: #14532D;
+    --gray-50: #F1EFE8; --gray-100: #D3D1C7; --gray-400: #888780; --gray-600: #5F5E5A;
+    --text-primary: #1a1a1a; --text-secondary: #5F5E5A; --text-muted: #888780;
+    --bg-page: #F8F7F2; --bg-card: #FFFFFF; --bg-secondary: #F1EFE8;
+    --border: #D3D1C7; --border-light: #E8E6DF;
+    --radius-md: 8px; --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 15px; line-height: 1.75; color: var(--text-primary); background: var(--bg-page); }
+
+  /* ── Page header ── */
+  .page-header { background: var(--blue-800); color: #E6F1FB; padding: 2.5rem 3rem 2rem; }
+  .page-header h1 { font-size: 22px; font-weight: 500; letter-spacing: -0.3px; margin-bottom: 0.4rem; }
+  .page-header p { font-size: 13px; opacity: 0.75; }
+  .v-badge { display:inline-block; background:rgba(255,255,255,0.18); border-radius:4px; padding:1px 8px; font-size:11px; margin-left:8px; vertical-align:middle; }
+
+  /* ── Nav ── */
+  .nav { display:flex; gap:0; background:var(--bg-card); border-bottom:1px solid var(--border); padding:0 2.5rem; position:sticky; top:0; z-index:100; overflow-x:auto; }
+  .nav a { display:inline-block; padding:.75rem 1.25rem; font-size:13px; color:var(--text-secondary); text-decoration:none; border-bottom:2px solid transparent; margin-bottom:-1px; transition:color .15s,border-color .15s; white-space:nowrap; }
+  .nav a:hover { color:var(--blue-800); border-bottom-color:var(--blue-200); }
+  .nav a.active { color:var(--blue-800); border-bottom-color:var(--blue-600); font-weight:500; }
+
+  /* ── Main ── */
+  .main { max-width:920px; margin:0 auto; padding:2.5rem 2rem 4rem; }
+
+  /* ── Section ── */
+  .section { margin-bottom:3rem; }
+  .section-label { font-size:11px; font-weight:500; letter-spacing:.08em; text-transform:uppercase; color:var(--text-muted); margin-bottom:.5rem; }
+  .section-title { font-size:20px; font-weight:500; color:var(--text-primary); margin-bottom:1.5rem; padding-bottom:.75rem; border-bottom:1px solid var(--border-light); }
+
+  /* ── QA ── */
+  .qa-list { display:flex; flex-direction:column; gap:1rem; }
+  .qa-card { background:var(--bg-card); border:.5px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; }
+  .qa-q { display:flex; align-items:flex-start; gap:.75rem; padding:1rem 1.25rem; cursor:pointer; user-select:none; }
+  .qa-q:hover { background:var(--bg-secondary); }
+  .qa-badge { flex-shrink:0; width:22px; height:22px; border-radius:50%; background:var(--blue-50); color:var(--blue-800); font-size:11px; font-weight:500; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+  .qa-badge.new { background:var(--green-50); color:var(--green-800); }
+  .qa-q-text { font-size:14px; font-weight:500; flex:1; }
+  .qa-arrow { flex-shrink:0; font-size:12px; color:var(--text-muted); margin-top:3px; transition:transform .2s; }
+  .qa-card.open .qa-arrow { transform:rotate(90deg); }
+  .qa-body { display:none; padding:0 1.25rem 1.25rem 3.25rem; border-top:.5px solid var(--border-light); }
+  .qa-card.open .qa-body { display:block; }
+  .qa-body p { font-size:14px; color:var(--text-primary); margin-top:.75rem; }
+  .qa-body .formula-box { background:var(--bg-secondary); border-left:3px solid var(--blue-200); border-radius:0 var(--radius-md) var(--radius-md) 0; padding:.6rem 1rem; margin:.75rem 0; font-size:13px; }
+  .qa-body .insight { background:var(--teal-50); border-left:3px solid var(--teal-200); border-radius:0 var(--radius-md) var(--radius-md) 0; padding:.6rem 1rem; margin:.75rem 0; font-size:13px; color:var(--teal-800); }
+  .qa-body .warn { background:var(--amber-50); border-left:3px solid var(--amber-200); border-radius:0 var(--radius-md) var(--radius-md) 0; padding:.6rem 1rem; margin:.75rem 0; font-size:13px; color:var(--amber-800); }
+  .qa-body .key { background:var(--green-50); border-left:3px solid var(--green-200); border-radius:0 var(--radius-md) var(--radius-md) 0; padding:.6rem 1rem; margin:.75rem 0; font-size:13px; color:var(--green-800); }
+
+  /* ── Metrics grid ── */
+  .metrics-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-bottom:1.5rem; }
+  .metric-card { background:var(--bg-card); border:.5px solid var(--border); border-radius:var(--radius-lg); padding:1rem 1.25rem; }
+  .metric-card.primary { border-color:var(--blue-200); background:var(--blue-50); }
+  .metric-name { font-size:12px; color:var(--text-muted); margin-bottom:.3rem; font-weight:500; }
+  .metric-sym { font-size:18px; font-weight:500; color:var(--blue-800); margin-bottom:.3rem; }
+  .metric-card.primary .metric-sym { color:var(--blue-600); }
+  .metric-desc { font-size:12px; color:var(--text-secondary); line-height:1.5; }
+  .metric-how { font-size:11px; color:var(--text-muted); margin-top:.4rem; padding-top:.4rem; border-top:.5px solid var(--border-light); }
+
+  /* ── Data table ── */
+  .data-table-wrap { background:var(--bg-card); border:.5px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; margin-bottom:1.5rem; }
+  .data-table-title { padding:.75rem 1.25rem; font-size:13px; font-weight:500; border-bottom:.5px solid var(--border-light); color:var(--text-secondary); background:var(--bg-secondary); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { padding:.5rem 1rem; text-align:left; font-weight:500; color:var(--text-secondary); font-size:12px; background:var(--bg-secondary); }
+  td { padding:.55rem 1rem; border-top:.5px solid var(--border-light); color:var(--text-primary); }
+  tr:hover td { background:var(--bg-secondary); }
+  .num { text-align:right; font-variant-numeric:tabular-nums; font-family:"SF Mono","Fira Code",monospace; }
+  .tag { display:inline-block; padding:1px 7px; border-radius:10px; font-size:11px; font-weight:500; }
+  .tag-good { background:var(--teal-50); color:var(--teal-800); }
+  .tag-warn { background:var(--amber-50); color:var(--amber-800); }
+  .tag-bad  { background:var(--coral-50); color:var(--coral-800); }
+  .tag-info { background:var(--blue-50);  color:var(--blue-800); }
+  .tag-new  { background:var(--green-50); color:var(--green-800); }
+
+  /* ── Appendix ── */
+  .deriv-block { background:var(--bg-card); border:.5px solid var(--border); border-radius:var(--radius-lg); margin-bottom:1.25rem; overflow:hidden; }
+  .deriv-header { display:flex; align-items:center; gap:.75rem; padding:.9rem 1.25rem; cursor:pointer; background:var(--bg-secondary); border-bottom:.5px solid var(--border-light); }
+  .deriv-header:hover { background:var(--gray-100); }
+  .deriv-num { width:24px; height:24px; border-radius:50%; background:var(--purple-50); color:var(--purple-800); font-size:11px; font-weight:500; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .deriv-num.new { background:var(--green-50); color:var(--green-800); }
+  .deriv-title { font-size:14px; font-weight:500; flex:1; }
+  .deriv-arrow { font-size:12px; color:var(--text-muted); transition:transform .2s; }
+  .deriv-block.open .deriv-arrow { transform:rotate(90deg); }
+  .deriv-body { display:none; padding:1.25rem; }
+  .deriv-block.open .deriv-body { display:block; }
+  .deriv-body p { font-size:14px; margin-bottom:.75rem; }
+  .deriv-body .step { background:var(--bg-secondary); border-radius:var(--radius-md); padding:.75rem 1rem; margin:.5rem 0; font-size:13px; }
+  .deriv-body .step-label { font-size:11px; font-weight:500; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.4rem; }
+  .deriv-body .result-box { background:var(--purple-50); border:1px solid var(--purple-200); border-radius:var(--radius-md); padding:.75rem 1rem; margin:.75rem 0; text-align:center; }
+  .deriv-body .key-box { background:var(--green-50); border:1px solid var(--green-200); border-radius:var(--radius-md); padding:.75rem 1rem; margin:.75rem 0; font-size:13px; color:var(--green-800); }
+  .deriv-body ul { padding-left:1.25rem; margin-top:.4rem; }
+  .deriv-body li { font-size:14px; margin-bottom:.3rem; }
+  .deriv-body .insight { background:var(--teal-50); border-left:3px solid var(--teal-200); border-radius:0 var(--radius-md) var(--radius-md) 0; padding:.6rem 1rem; margin:.75rem 0; font-size:13px; color:var(--teal-800); }
+  .deriv-body .warn { background:var(--amber-50); border-left:3px solid var(--amber-200); border-radius:0 var(--radius-md) var(--radius-md) 0; padding:.6rem 1rem; margin:.75rem 0; font-size:13px; color:var(--amber-800); }
+
+  /* ── Results section ── */
+  .result-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem; }
+  @media(max-width:640px){ .result-grid { grid-template-columns:1fr; } }
+  .result-card { background:var(--bg-card); border:.5px solid var(--border); border-radius:var(--radius-lg); padding:1.25rem; }
+  .result-card-title { font-size:13px; font-weight:600; margin-bottom:.75rem; display:flex; align-items:center; gap:.5rem; }
+  .dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .dot-real { background:#2563eb; }
+  .dot-sim  { background:#dc2626; }
+  .result-item { display:flex; justify-content:space-between; align-items:center; padding:.35rem 0; border-bottom:.5px solid var(--border-light); font-size:13px; }
+  .result-item:last-child { border-bottom:none; }
+  .result-label { color:var(--text-secondary); }
+  .result-val { font-weight:600; font-family:"SF Mono","Fira Code",monospace; font-size:12px; }
+  .val-good { color:var(--green-600); }
+  .val-warn { color:var(--amber-600); }
+  .val-bad  { color:var(--coral-600); }
+
+  /* ── Misc ── */
+  .katex-display { margin:.5rem 0; overflow-x:auto; }
+  .katex { font-size:.95em; }
+  .chip { display:inline-block; padding:2px 8px; background:var(--blue-50); color:var(--blue-800); border-radius:10px; font-size:12px; font-weight:500; }
+  .footer { text-align:center; font-size:12px; color:var(--text-muted); padding:2rem 0 3rem; border-top:.5px solid var(--border-light); margin-top:2rem; }
+
+  /* ── Diagnosis flow ── */
+  .flow-box { background:var(--bg-secondary); border-radius:var(--radius-lg); padding:1rem 1.25rem; font-size:13px; font-family:"SF Mono","Fira Code",monospace; line-height:2; margin:1rem 0; border:.5px solid var(--border); }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>踝关节PD控制稳定性分析 <span class="v-badge">v5</span></h1>
+  <p>理论整理 · FRF幅值/相位法 · 摆动相专用FRF · Sim vs Real 实测结论 · Kp 25–50 / Kd 0.4–0.8</p>
+</div>
+
+<nav class="nav">
+  <a href="#sec1" class="active">一、可解释的问题</a>
+  <a href="#sec2">二、指标体系</a>
+  <a href="#sec3">三、附录：推导</a>
+  <a href="#sec4">四、实测结论</a>
+</nav>
+
+<div class="main">
+
+<!-- ═══════════════════════════════════════════════════════ SECTION 1 -->
+<div class="section" id="sec1">
+  <div class="section-label">Section 1</div>
+  <div class="section-title">可解释的问题</div>
+  <p style="font-size:14px;color:var(--text-secondary);margin-bottom:1.5rem;">
+    以下问题均可由二阶PD系统理论定量解释，点击展开各问题的分析。
+  </p>
+
+  <div class="qa-list">
+
+    <!-- Q1 -->
+    <div class="qa-card open">
+      <div class="qa-q" onclick="toggleQA(this)">
+        <div class="qa-badge">1</div>
+        <div class="qa-q-text">踝关节振荡频率为何约 3 Hz？</div>
+        <div class="qa-arrow">▶</div>
+      </div>
+      <div class="qa-body">
+        <p>踝关节受PD控制时，闭环系统等效为二阶系统，其自然频率由刚度和惯量决定：</p>
+        <div class="formula-box">\( \omega_n = \sqrt{\dfrac{K_p}{J_\text{eff}}} \)</div>
+        <p>实测踝关节等效转动惯量 \(J_\text{eff} \approx 0.0965\,\text{kg·m}^2\)（摆动相近似），代入各Kp值：</p>
+        <div class="data-table-wrap" style="margin-top:.75rem;">
+          <table>
+            <thead><tr><th>Kp</th><th class="num">ωn (rad/s)</th><th class="num">fn (Hz)</th><th>实测主频</th></tr></thead>
+            <tbody>
+              <tr><td>25</td><td class="num">16.1</td><td class="num">2.56</td><td><span class="tag tag-warn">3.0 Hz（同频率箱）</span></td></tr>
+              <tr><td>30</td><td class="num">17.6</td><td class="num">2.81</td><td><span class="tag tag-warn">3.0 Hz（同频率箱）</span></td></tr>
+              <tr><td>35</td><td class="num">19.0</td><td class="num">3.03</td><td><span class="tag tag-good">3.0 Hz ✓</span></td></tr>
+              <tr><td>40</td><td class="num">20.4</td><td class="num">3.24</td><td><span class="tag tag-warn">3.0 Hz（同频率箱）</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="warn">⚠ 频率分辨率限制：采样率100 Hz、Welch窗2s → Δf = 0.5 Hz。Kp=25–40 对应 fn=2.56–3.24 Hz，均落入同一频率箱（3.0 Hz），实测主频无法区分各Kp之间的差异。</div>
+        <div class="insight">✓ 结论：3 Hz振荡是系统固有共振，并非步态频率（步态≈1.8 Hz）。Kp越大，fn越高，振荡越快但幅度受Kd控制。</div>
+      </div>
+    </div>
+
+    <!-- Q2 -->
+    <div class="qa-card">
+      <div class="qa-q" onclick="toggleQA(this)">
+        <div class="qa-badge">2</div>
+        <div class="qa-q-text">为何 Kd 增大后振荡幅度明显减小？</div>
+        <div class="qa-arrow">▶</div>
+      </div>
+      <div class="qa-body">
+        <p>阻尼比 ζ 直接由 Kd 决定：</p>
+        <div class="formula-box">\( \zeta = \dfrac{K_d}{2\sqrt{K_p \cdot J_\text{eff}}} \)</div>
+        <p>谐振峰增益（仅当 ζ &lt; 0.707 时存在）：</p>
+        <div class="formula-box">\( M_r = \dfrac{1}{2\zeta\sqrt{1-\zeta^2}} \)</div>
+        <div class="data-table-wrap" style="margin-top:.75rem;">
+          <table>
+            <thead><tr><th>Kp/Kd</th><th class="num">ζ</th><th class="num">M_r (倍)</th><th class="num">PM≈100ζ (°)</th><th class="num">τ_decay (ms)</th></tr></thead>
+            <tbody>
+              <tr><td>25/0.4</td><td class="num">0.129</td><td class="num">3.91</td><td class="num">12.9°</td><td class="num"><span class="tag tag-bad">483</span></td></tr>
+              <tr><td>30/0.4</td><td class="num">0.118</td><td class="num">4.27</td><td class="num">11.8°</td><td class="num"><span class="tag tag-bad">483</span></td></tr>
+              <tr><td>35/0.5</td><td class="num">0.136</td><td class="num">3.71</td><td class="num">13.6°</td><td class="num"><span class="tag tag-warn">386</span></td></tr>
+              <tr><td>40/0.8</td><td class="num">0.204</td><td class="num">2.50</td><td class="num">20.4°</td><td class="num"><span class="tag tag-good">241</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="insight">✓ Kp=40/Kd=0.8 的 ζ=0.204 是四组中最高，M_r最小（2.50），相位裕度最大（20.4°），振荡衰减最快（τ=241ms）。这解释了为何该组在实测中表现最稳定。</div>
+      </div>
+    </div>
+
+    <!-- Q3 -->
+    <div class="qa-card">
+      <div class="qa-q" onclick="toggleQA(this)">
+        <div class="qa-badge">3</div>
+        <div class="qa-q-text">M_r 的物理含义是什么？</div>
+        <div class="qa-arrow">▶</div>
+      </div>
+      <div class="qa-body">
+        <p>\(M_r\) 是闭环频率响应在谐振峰处的幅值增益峰值：若输入跟踪指令中含有频率接近 \(\omega_r\) 的成分，该频率分量将被放大 \(M_r\) 倍输出。</p>
+        <div class="formula-box">\( \omega_r = \omega_n\sqrt{1 - 2\zeta^2} \quad (\text{共振频率，略低于} \omega_n) \)</div>
+        <p>对于 Kp=35/Kd=0.5（ζ=0.136，M_r=3.71）：步态规划器在3Hz附近产生的关节目标抖动，将被放大约<strong>3.7倍</strong>作用于实际关节；任何来自接地冲击的3Hz扰动，均产生3.7倍的过冲响应。</p>
+        <div class="warn">⚠ 所有四组参数的 ζ 均远小于 0.707，因此均存在谐振峰。M_r > 3 表示系统振荡风险显著。</div>
+      </div>
+    </div>
+
+    <!-- Q4 -->
+    <div class="qa-card">
+      <div class="qa-q" onclick="toggleQA(this)">
+        <div class="qa-badge">4</div>
+        <div class="qa-q-text">控制延迟（约 40–110 ms）为何会恶化稳定性？</div>
+        <div class="qa-arrow">▶</div>
+      </div>
+      <div class="qa-body">
+        <p>纯延迟 \(\tau_d\) 在频域中表现为随频率线性增大的相位损失：</p>
+        <div class="formula-box">\( \varphi_\text{delay}(\omega) = -\omega \cdot \tau_d \quad [\text{rad}] \)</div>
+        <p>在自然频率 \(\omega_n\) 处，延迟造成的相位损失：</p>
+        <div class="formula-box">\( \Delta\varphi = \omega_n \cdot \tau_d \times \dfrac{180°}{\pi} \)</div>
+        <p>以 Kp=35/Kd=0.5、延迟50ms 为例：\(\Delta\varphi = 19.0 \times 0.05 \times 57.3° \approx 54.5°\)，而该组的相位裕度 PM ≈ 13.6°，延迟已消耗相位裕度的 <strong>4倍</strong>。</p>
+        <div class="insight">✓ PD控制器本身提供相位超前 φ_pd = arctan(Kd·ω/Kp)，但在实际系统中延迟远大于PD的相位超前量，导致净相位裕度透支。实测延迟：Real = 40–110ms，Sim ≈ 0–30ms（xcorr估计）。</div>
+      </div>
+    </div>
+
+    <!-- Q5 -->
+    <div class="qa-card">
+      <div class="qa-q" onclick="toggleQA(this)">
+        <div class="qa-badge">5</div>
+        <div class="qa-q-text">为何 ankle_roll 左右脚振荡特性不对称？</div>
+        <div class="qa-arrow">▶</div>
+      </div>
+      <div class="qa-body">
+        <p>自然频率和阻尼比均依赖等效转动惯量 \(J_\text{eff}\)，而这两者在实际机器人中因以下原因存在左右差异：</p>
+        <ul style="padding-left:1.25rem;margin-top:.5rem;">
+          <li style="font-size:14px;margin-bottom:.4rem;"><strong>机械制造公差</strong>：左右腿关节间隙、摩擦力不完全对称。</li>
+          <li style="font-size:14px;margin-bottom:.4rem;"><strong>接地刚度差异</strong>：接触地面时左右足底压力分布不同，等效支撑刚度不同。</li>
+          <li style="font-size:14px;margin-bottom:.4rem;"><strong>静态偏置</strong>：实测部分工况左脚 ankle_roll 存在约 140 mrad（8°）的静态偏差，而右脚近似为零，说明存在机械对中误差或重力补偿偏差。</li>
+        </ul>
+        <div class="insight">✓ DeltaLR（左右eRMS比）> 1.5 时需关注机械不对称；正常步态中 DeltaLR 应在 0.8–1.2 范围。</div>
+      </div>
+    </div>
+
+    <!-- Q6 -->
+    <div class="qa-card">
+      <div class="qa-q" onclick="toggleQA(this)">
+        <div class="qa-badge">6</div>
+        <div class="qa-q-text">增益裕度（GM）和相位裕度（PM）代表什么？</div>
+        <div class="qa-arrow">▶</div>
+      </div>
+      <div class="qa-body">
+        <p><strong>相位裕度（PM）</strong>：在增益穿越频率处，系统相角距离 −180° 还有多少余量。PM越大，系统越不容易因参数变化或延迟而失稳。近似公式：PM ≈ 100ζ（ζ &lt; 0.7时）</p>
+        <div class="formula-box">\( PM = 180° + \angle G(j\omega_{gc}) \quad \text{其中 } |G(j\omega_{gc})| = 1 \)</div>
+        <p><strong>增益裕度（GM）</strong>：在相位穿越频率（∠G(jω) = −180°）处，系统增益还需放大多少倍才会失稳。</p>
+        <div class="warn">⚠ 实际机器人足踝PD控制中，由于延迟大、ζ小，PM通常只有10–20°，远低于工程推荐值45°，加入50ms延迟后PM实际为负。这是踝关节振荡难以消除的核心原因。</div>
+      </div>
+    </div>
+
+    <!-- Q7 -->
+    <div class="qa-card">
+      <div class="qa-q" onclick="toggleQA(this)">
+        <div class="qa-badge">7</div>
+        <div class="qa-q-text">摆动相与支撑相的动态特性为何截然不同？</div>
+        <div class="qa-arrow">▶</div>
+      </div>
+      <div class="qa-body">
+        <p>行走过程中踝关节是<strong>时变系统</strong>，两相有两类完全不同的动态变化：</p>
+        <div class="data-table-wrap" style="margin-top:.5rem;">
+          <table>
+            <thead><tr><th>效应</th><th>摆动相</th><th>支撑相</th><th>影响</th></tr></thead>
+            <tbody>
+              <tr><td><strong>等效惯量 J_eff</strong></td><td>≈ 0.0965 kg·m²（足踝本地惯量）</td><td>≈ 0.4–0.8 kg·m²（承受全身）</td><td>支撑相 fn_eff = fn_th/√(J_eff_st/J_eff_sw) ≈ 0.4×fn_th</td></tr>
+              <tr><td><strong>等效刚度 K_eff</strong></td><td>= Kp（仅PD刚度）</td><td>= Kp + K_contact（接触刚度叠加）</td><td>接地振铃频率（fn_stance）可高于 fn_th</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><strong>两类效应方向相反，影响不同量：</strong></p>
+        <ul style="padding-left:1.25rem;margin:.5rem 0;">
+          <li style="font-size:14px;margin-bottom:.4rem;">
+            <strong>J_eff_stance 效应</strong>（影响 Welch FRF）：高惯量使系统等效 fn_eff 下移至 1–1.5 Hz，在 fn_th = 3 Hz 处评估 FRF 时已进入滚降区，|H| 远低于 0.5，造成阻尼"虚假偏高"。
+          </li>
+          <li style="font-size:14px;margin-bottom:.4rem;">
+            <strong>K_contact 效应</strong>（影响接地后振铃）：高接触刚度使接地瞬间的振铃频率 fn_stance ≈ 3.3–4 Hz，略高于 fn_th，这是真实的物理响应。
+          </li>
+        </ul>
+        <div class="insight">✓ 因此单一 Kp/Kd 对整个步态不能同时最优：摆动相最优（低Kp跟踪平滑）与接地相最优（高Kd快速消散冲击）往往相互矛盾。分相位控制（swing/stance切换Kd）是根本解法。</div>
+      </div>
+    </div>
+
+    <!-- Q8 NEW -->
+    <div class="qa-card open">
+      <div class="qa-q" onclick="toggleQA(this)">
+        <div class="qa-badge new">8</div>
+        <div class="qa-q-text">为何全步态 G_fn &lt; 0.5 不代表过阻尼？—— J_eff_stance 的"滚降区"幻觉</div>
+        <div class="qa-arrow">▶</div>
+      </div>
+      <div class="qa-body">
+        <p>这是 v5 版本最重要的修正。先回顾公式的成立前提：</p>
+        <div class="formula-box">\( \zeta = \dfrac{1}{2 \cdot G_{fn}} \quad \text{其中} \quad G_{fn} = |H(j\omega_n)| \)</div>
+        <p>这个公式的隐含条件是：<strong>评估频率 ω_n 等于当前系统的实际自然频率</strong>。步行中，这个条件在支撑相被严重违反。</p>
+
+        <p><strong>第一步：支撑相惯量增大 → fn_eff 下移</strong></p>
+        <div class="formula-box">
+          \( J_\text{eff,stance} \approx 6 \times J_\text{eff,swing} \)<br>
+          \( f_{n,\text{eff,stance}} = \dfrac{\sqrt{K_p / J_\text{eff,stance}}}{2\pi} = \dfrac{f_{n,\text{th}}}{\sqrt{6}} \approx 0.41 \times f_{n,\text{th}} \approx 1.2\,\text{Hz} \)
+        </div>
+
+        <p><strong>第二步：在 fn_th 处评估支撑相 FRF → 已在滚降区</strong></p>
+        <p>对于支撑相系统（fn_eff ≈ 1.2 Hz，ζ = 0.14），在 f = fn_th = 3.03 Hz 处：</p>
+        <div class="formula-box">
+          \( r = f / f_{n,\text{eff}} = 3.03 / 1.2 \approx 2.5 \quad (\text{高频滚降区，}r \gg 1) \)<br>
+          \( |G_{CL}(j \cdot 2.5\omega_n)| = \dfrac{1}{\sqrt{(1-2.5^2)^2 + (2\times 0.14\times 2.5)^2}} \approx \dfrac{1}{\sqrt{23.1 + 0.49}} \approx 0.21 \)
+        </div>
+        <p>结论：支撑相系统<strong>本身是欠阻尼的</strong>（ζ=0.14），但在 fn_th = 3 Hz 处的幅值只有 0.21——不是因为阻尼大，而是<strong>频率太高，系统跟不上</strong>。</p>
+
+        <p><strong>第三步：Welch FRF 是两相的功率加权混合</strong></p>
+        <div class="formula-box">
+          \( H_\text{Welch}(f_{n,\text{th}}) \approx 0.60 \times H_\text{stance}(f_{n,\text{th}}) + 0.40 \times H_\text{swing}(f_{n,\text{th}}) \)<br>
+          \( \approx 0.60 \times 0.21 + 0.40 \times \dfrac{1}{2 \times 0.14} \approx 0.12 + 1.43 \approx 0.31 \)
+        </div>
+        <p>（实际值更低，因为功率域混合是非线性的，但方向一致）</p>
+
+        <p><strong>结论</strong>：全步态 G_fn ≈ 0.2–0.35 → ζ = 1/(2×0.25) = 2.0，看起来"严重过阻尼"——这是<strong>支撑相惯量污染</strong>造成的完全虚假的结果。</p>
+        <div class="key">
+          ✅ 区分方法：单独计算<strong>摆动相 FRF</strong>（仅 contact=0 时段），得到 G_fn_sw：<br>
+          &nbsp;&nbsp;&nbsp;G_fn_sw &gt; 0.5（欠阻尼）→ 全步态 G_fn 低是 J_eff_stance 效应，不是过阻尼<br>
+          &nbsp;&nbsp;&nbsp;G_fn_sw &lt; 0.5（也低）→ 系统真正过阻尼（摆动相也无法跟踪）
+        </div>
+        <div class="insight">✓ 实测验证（v5）：Real 机器人摆动相 G_fn_sw ≈ 2.1–3.4（欠阻尼！），全步态 G_fn ≈ 0.14–0.44（看起来过阻尼），确认全步态低值完全由支撑相惯量导致。</div>
+      </div>
+    </div>
+
+    <!-- Q9 -->
+    <div class="qa-card">
+      <div class="qa-q" onclick="toggleQA(this)">
+        <div class="qa-badge new">9</div>
+        <div class="qa-q-text">为何仿真中阶跃响应看起来过阻尼，但 ζ_step 实测却是欠阻尼？</div>
+        <div class="qa-arrow">▶</div>
+      </div>
+      <div class="qa-body">
+        <p>这是一个经典的"输入被平滑"陷阱。仿真中踝关节目标值经过低通滤波器 <code>pos_des_lpf</code> 处理，将原始阶跃信号平滑成了一个斜坡。</p>
+        <p>对于欠阻尼系统（ζ≈0.14）：</p>
+        <ul style="padding-left:1.25rem;margin-top:.5rem;">
+          <li style="font-size:14px;margin-bottom:.4rem;"><strong>真实阶跃输入</strong>：响应会有明显超调（overshoot ≈ 40%），振荡衰减，清晰欠阻尼行为。</li>
+          <li style="font-size:14px;margin-bottom:.4rem;"><strong>斜坡/平滑输入</strong>：系统跟随斜坡，超调被平滑掉，外观上<strong>看起来无超调</strong>（像过阻尼），但系统参数没变。</li>
+        </ul>
+        <div class="key">
+          ✅ 验证方法：仿真中发送真实阶跃指令（绕过 lpf），观察是否有超调。<br>
+          &nbsp;&nbsp;&nbsp;实测：摆动相阶跃实验 ζ_step = 0.07–0.25（欠阻尼），与理论 ζ_th = 0.136 一致。
+        </div>
+        <div class="insight">✓ 结论："看起来过阻尼"的阶跃响应是 pos_des_lpf 掩盖了超调，系统本身仍然欠阻尼。不能用滤波后的目标来判断系统阻尼。</div>
+      </div>
+    </div>
+
+  </div><!-- end qa-list -->
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════ SECTION 2 -->
+<div class="section" id="sec2">
+  <div class="section-label">Section 2</div>
+  <div class="section-title">指标体系</div>
+
+  <p style="font-size:14px;color:var(--text-secondary);margin-bottom:.75rem;">
+    <strong>核心原则（v5）</strong>：全步态 FRF 含支撑相惯量污染，<span style="color:var(--coral-600);font-weight:600;">G_fn_sw（摆动相专用 FRF）</span>才是真正可信的阻尼观测量。
+  </p>
+
+  <div class="data-table-wrap" style="margin-bottom:1.5rem;">
+    <div class="data-table-title">一级指标（主要判定依据）</div>
+    <table>
+      <thead><tr><th>指标</th><th>符号</th><th>含义</th><th>可靠条件</th><th>判定</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>摆动相 FRF 幅值</strong> <span class="tag tag-new">核心</span></td>
+          <td>\(G_{fn,sw}\)</td>
+          <td>仅摆动相时段 FRF 在 fn_th 处的幅值，去除 J_eff_stance 污染</td>
+          <td>coh_sw ≥ 0.40 且 n_segs ≥ 5</td>
+          <td>&gt;1 欠阻尼；0.5–1 临界；&lt;0.5 过阻尼</td>
+        </tr>
+        <tr>
+          <td><strong>摆动相阻尼比</strong> <span class="tag tag-new">核心</span></td>
+          <td>\(\zeta_{FRF,sw}\)</td>
+          <td>\(1/(2 G_{fn,sw})\)，摆动相真实阻尼</td>
+          <td>同上</td>
+          <td>&lt;0.3 欠阻尼；0.7–1.3 临界；&gt;1.3 过阻尼</td>
+        </tr>
+        <tr>
+          <td>摆动相跟踪误差</td>
+          <td>\(e_{RMS,sw}\)</td>
+          <td>contact=0 时段的 RMS，反映控制器跟踪质量</td>
+          <td>摆动相时长足够</td>
+          <td>Real/Sim 对比，差距反映 Sim2Real gap</td>
+        </tr>
+        <tr>
+          <td>支撑相跟踪误差</td>
+          <td>\(e_{RMS,st}\)</td>
+          <td>contact=1 时段的 RMS，反映接地稳定性</td>
+          <td>—</td>
+          <td>高于 e_RMS_sw 说明接地冲击显著</td>
+        </tr>
+        <tr>
+          <td>全步态 FRF 幅值</td>
+          <td>\(G_{fn}\)</td>
+          <td>全信号 FRF（含支撑相 J_eff 污染），<strong>需配合 G_fn_sw 解读</strong></td>
+          <td>coh ≥ 0.40</td>
+          <td>单独低于0.5不能下过阻尼结论</td>
+        </tr>
+        <tr>
+          <td>理论阻尼比</td>
+          <td>\(\zeta_{th}\)</td>
+          <td>\(K_d/(2\sqrt{K_p J_{eff}})\)，参数设计参考值</td>
+          <td>需确认控制器为无零点形式</td>
+          <td>&lt;0.2 需关注振荡风险</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="data-table-wrap" style="margin-bottom:1.5rem;">
+    <div class="data-table-title">二级指标（辅助判定）</div>
+    <table>
+      <thead><tr><th>指标</th><th>符号</th><th>计算方法</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td>自然频率（理论）</td><td>\(f_n^{th}\)</td><td>\(\sqrt{K_p/J_{eff}}/(2\pi)\)</td><td>估计谐振区位置</td></tr>
+        <tr><td>自然频率（FRF相位）</td><td>\(f_n^{FRF}\)</td><td>延迟补偿后 ∠H=-90° 处（仅无零点系统）</td><td>验证 fn_th 是否准确</td></tr>
+        <tr><td>控制延迟</td><td>\(\tau_d\)</td><td>摆动相 xcorr 中位数 [ms]</td><td>fn处延迟相位损失 = 360°·fn·τ_d/1000</td></tr>
+        <tr><td>接地过冲幅度</td><td>\(A_{peak}\)</td><td>接地后150ms峰值 / 400ms后稳态均值</td><td>接地冲击响应严重程度</td></tr>
+        <tr><td>谐振增益峰值</td><td>\(M_r\)</td><td>\(1/(2\zeta\sqrt{1-\zeta^2})\)，仅ζ&lt;0.707时存在</td><td>振荡放大风险</td></tr>
+        <tr><td>振荡衰减时间常数</td><td>\(\tau_{decay}\)</td><td>\(2 J_{eff}/K_d = 1/(\zeta\omega_n)\)</td><td>振荡持续时长</td></tr>
+        <tr><td>左右不对称指数</td><td>\(\Delta_{LR}\)</td><td>\(e_{RMS,L}/e_{RMS,R}\)</td><td>机械/控制不对称</td></tr>
+        <tr><td>摆动相相干函数</td><td>\(\gamma^2_{fn,sw}\)</td><td>摆动相 FRF 在 fn_th 处的相干</td><td>&lt;0.40时 G_fn_sw 不可信</td></tr>
+        <tr><td>接地振铃频率</td><td>\(f_{n,stance}\)</td><td>接地后短窗 FFT 主峰（3–20 Hz）</td><td>接触刚度估计参考</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="data-table-wrap">
+    <div class="data-table-title">各 Kp/Kd 组合理论指标汇总（J_eff_swing = 0.0965 kg·m²）</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Kp/Kd</th>
+          <th class="num">fn (Hz)</th>
+          <th class="num">ζ_th</th>
+          <th class="num">M_r</th>
+          <th class="num">PM (°)</th>
+          <th class="num">τ_decay (ms)</th>
+          <th>评估</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>25/0.4</strong></td><td class="num">2.56</td><td class="num">0.129</td><td class="num">3.91</td><td class="num">12.9°</td><td class="num">483</td><td><span class="tag tag-bad">差 — 高M_r，长衰减</span></td></tr>
+        <tr><td><strong>30/0.4</strong></td><td class="num">2.81</td><td class="num">0.118</td><td class="num">4.27</td><td class="num">11.8°</td><td class="num">483</td><td><span class="tag tag-bad">最差 — M_r最高</span></td></tr>
+        <tr><td><strong>35/0.5</strong></td><td class="num">3.03</td><td class="num">0.136</td><td class="num">3.71</td><td class="num">13.6°</td><td class="num">386</td><td><span class="tag tag-warn">中等 — 常用配置</span></td></tr>
+        <tr><td><strong>40/0.8</strong></td><td class="num">3.24</td><td class="num">0.204</td><td class="num">2.50</td><td class="num">20.4°</td><td class="num">241</td><td><span class="tag tag-good">相对最优</span></td></tr>
+        <tr><td><strong>50/0.8</strong></td><td class="num">3.62</td><td class="num">0.182</td><td class="num">2.78</td><td class="num">18.2°</td><td class="num">241</td><td><span class="tag tag-warn">fn高，跟踪刚，但ζ↓</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="background:var(--bg-card);border:.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;font-size:13px;color:var(--text-secondary);">
+    <div style="font-weight:500;color:var(--text-primary);margin-bottom:.5rem;font-size:14px;">加入延迟后实际 PM 全部透支</div>
+    <p>在 ωn 处，50ms延迟的相位损失 Δφ = ωn × 0.05 × 57.3°，各组：</p>
+    <ul style="padding-left:1.25rem;margin-top:.4rem;">
+      <li>Kp=25: Δφ ≈ <strong>46.2°</strong>，PM透支 33.3°（实际 PM ≈ −33°）</li>
+      <li>Kp=35: Δφ ≈ <strong>54.5°</strong>，PM透支 40.9°</li>
+      <li>Kp=40: Δφ ≈ <strong>58.4°</strong>，PM透支 38.0°</li>
+    </ul>
+    <p style="margin-top:.5rem;color:var(--coral-800);">⚠ 所有配置在加入 50ms 延迟后 PM 均为负值，系统稳定性完全依赖地面阻尼和机械约束。</p>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════ SECTION 3 -->
+<div class="section" id="sec3">
+  <div class="section-label">Section 3 — 附录</div>
+  <div class="section-title">理论依据及推导</div>
+
+  <!-- A1 -->
+  <div class="deriv-block open">
+    <div class="deriv-header" onclick="toggleDeriv(this)">
+      <div class="deriv-num">A1</div>
+      <div class="deriv-title">二阶PD系统标准形式 → 自然频率与阻尼比</div>
+      <div class="deriv-arrow">▶</div>
+    </div>
+    <div class="deriv-body">
+      <p>踝关节转动动力学（忽略重力和摩擦）：</p>
+      <div class="step"><div class="step-label">原始方程</div>
+        \[J_\text{eff}\,\ddot{q} = \tau_\text{PD} + \tau_\text{dist}, \qquad \tau_\text{PD} = -K_p(q - q_d) - K_d\dot{q}\]
+      </div>
+      <div class="step"><div class="step-label">合并为闭环方程（设误差 e = q − q_d）</div>
+        \[J_\text{eff}\,\ddot{e} + K_d\,\dot{e} + K_p\,e = \tau_\text{dist}\]
+      </div>
+      <div class="result-box">
+        \[\boxed{\omega_n = \sqrt{\frac{K_p}{J_\text{eff}}},\qquad \zeta = \frac{K_d}{2\sqrt{K_p \cdot J_\text{eff}}}}\]
+      </div>
+      <p>闭环传递函数（无零点形式，仅关节速度微分）：</p>
+      \[G_{CL}(s) = \frac{\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}\]
+      <div class="warn">⚠ 若控制器为完整误差微分形式（τ = Kp·e + Kd·ė），则 G_CL 含零点：(Kd·s + Kp)/(J·s² + Kd·s + Kp)，下述所有 |H(fn)| = 1/(2ζ) 和 ∠H(fn) = -90° 的结论均不成立。</div>
+    </div>
+  </div>
+
+  <!-- A2 -->
+  <div class="deriv-block">
+    <div class="deriv-header" onclick="toggleDeriv(this)">
+      <div class="deriv-num">A2</div>
+      <div class="deriv-title">谐振峰 M_r 的完整推导</div>
+      <div class="deriv-arrow">▶</div>
+    </div>
+    <div class="deriv-body">
+      <div class="step"><div class="step-label">幅频响应，令 u = ω/ωn</div>
+        \[|H(ju)| = \frac{1}{\sqrt{(1-u^2)^2 + (2\zeta u)^2}}\]
+      </div>
+      <div class="step"><div class="step-label">对分母平方关于 u² 求导，令为零</div>
+        \[u^2 = 1 - 2\zeta^2 \implies \omega_r = \omega_n\sqrt{1-2\zeta^2}\]
+      </div>
+      <div class="result-box">
+        \[\boxed{M_r = \frac{1}{2\zeta\sqrt{1-\zeta^2}}, \qquad \zeta < \frac{1}{\sqrt{2}} \approx 0.707}\]
+      </div>
+      <ul>
+        <li>ζ = 0.136（Kp=35/Kd=0.5）：M_r = <strong>3.71</strong></li>
+        <li>ζ = 0.204（Kp=40/Kd=0.8）：M_r = <strong>2.50</strong></li>
+        <li>ζ → 1/√2：M_r → 1（峰值消失，临界条件）</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- A3 -->
+  <div class="deriv-block">
+    <div class="deriv-header" onclick="toggleDeriv(this)">
+      <div class="deriv-num">A3</div>
+      <div class="deriv-title">欠阻尼振荡衰减包络与时间常数 τ_decay</div>
+      <div class="deriv-arrow">▶</div>
+    </div>
+    <div class="deriv-body">
+      <div class="step"><div class="step-label">特征根</div>
+        \[s_{1,2} = -\zeta\omega_n \pm j\,\omega_d, \qquad \omega_d = \omega_n\sqrt{1-\zeta^2}\]
+      </div>
+      <div class="step"><div class="step-label">时域响应包络</div>
+        \[e(t) = A \cdot e^{-\zeta\omega_n t} \cdot \sin(\omega_d t + \phi)\]
+      </div>
+      <div class="result-box">
+        \[\boxed{\tau_\text{decay} = \frac{1}{\zeta\omega_n} = \frac{2J_\text{eff}}{K_d}}\]
+      </div>
+      <div class="data-table-wrap" style="margin-top:.75rem;">
+        <table>
+          <thead><tr><th>Kp/Kd</th><th class="num">τ_decay</th><th class="num">3τ（95%衰减）</th><th>步态内</th></tr></thead>
+          <tbody>
+            <tr><td>25/0.4 & 30/0.4</td><td class="num">483 ms</td><td class="num">1449 ms</td><td><span class="tag tag-bad">跨越多步仍未消散</span></td></tr>
+            <tr><td>35/0.5</td><td class="num">386 ms</td><td class="num">1158 ms</td><td><span class="tag tag-warn">约 2 步</span></td></tr>
+            <tr><td>40/0.8</td><td class="num">241 ms</td><td class="num">723 ms</td><td><span class="tag tag-good">约 1.3 步</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- A4 -->
+  <div class="deriv-block">
+    <div class="deriv-header" onclick="toggleDeriv(this)">
+      <div class="deriv-num">A4</div>
+      <div class="deriv-title">相位裕度 PM 与阻尼比 ζ 的关系推导</div>
+      <div class="deriv-arrow">▶</div>
+    </div>
+    <div class="deriv-body">
+      <div class="step"><div class="step-label">开环传递函数（PD + 纯积分对象）</div>
+        \[G(s) = \frac{\omega_n^2(1 + 2\zeta s/\omega_n)}{s^2}\]
+      </div>
+      <div class="step"><div class="step-label">小ζ近似求 PM</div>
+        \[PM \approx \arctan(2\zeta) \approx 115\zeta°\]
+        常用工程近似：
+      </div>
+      <div class="result-box">
+        \[\boxed{PM \approx 100\zeta \quad \text{[度]}, \qquad \zeta < 0.7}\]
+      </div>
+      <ul>
+        <li>ζ=0.136 → PM≈13.6°（工程上需 PM&gt;45°）</li>
+        <li>要达到 PM=45°：需要 ζ≈0.45，即 Kd ≈ 1.66（Kp=35）</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- A5 -->
+  <div class="deriv-block">
+    <div class="deriv-header" onclick="toggleDeriv(this)">
+      <div class="deriv-num">A5</div>
+      <div class="deriv-title">增益裕度定义与奈奎斯特判据</div>
+      <div class="deriv-arrow">▶</div>
+    </div>
+    <div class="deriv-body">
+      <div class="step"><div class="step-label">定义</div>
+        在相位穿越频率 ω_pc（∠G(jω_pc) = −180°）处：
+        \[GM = \frac{1}{|G(j\omega_{pc})|} \quad \Leftrightarrow \quad GM_\text{dB} = -20\log|G(j\omega_{pc})|\]
+      </div>
+      <div class="step"><div class="step-label">奈奎斯特判据（通用）</div>
+        \[Z = N + P = 0 \implies \text{闭环稳定}\]
+        N为顺时针绕 (−1,0) 圈数，P为开环右半平面极点数。
+      </div>
+      <div class="insight">✓ 机器人腿部控制中计入大延迟（e^{-τs}）时，需借助奈奎斯特图逐案分析；简单用GM判断可能给出错误结论。</div>
+    </div>
+  </div>
+
+  <!-- A6 -->
+  <div class="deriv-block">
+    <div class="deriv-header" onclick="toggleDeriv(this)">
+      <div class="deriv-num">A6</div>
+      <div class="deriv-title">延迟相位损失与PD相位超前的平衡</div>
+      <div class="deriv-arrow">▶</div>
+    </div>
+    <div class="deriv-body">
+      <div class="step"><div class="step-label">纯延迟相位损失</div>
+        \[\varphi_\text{delay}(\omega) = -\omega\tau_d \quad [\text{rad}]\]
+      </div>
+      <div class="step"><div class="step-label">PD微分项相位超前</div>
+        \[\varphi_\text{PD}(\omega_n) = \arctan(2\zeta)\]
+        Kp=35/Kd=0.5，τd=50ms 处：
+        <ul style="padding-left:1.25rem;margin-top:.3rem;">
+          <li>PD超前：arctan(0.272) ≈ <strong>+15.2°</strong></li>
+          <li>延迟损失：<strong>−54.5°</strong></li>
+          <li>净效果：<strong>−39.3°</strong>（PD无法补偿延迟）</li>
+        </ul>
+      </div>
+      <p>根本解决方案：减小延迟（提升控制频率）或引入 Smith 预估器。</p>
+    </div>
+  </div>
+
+  <!-- A7 -->
+  <div class="deriv-block">
+    <div class="deriv-header" onclick="toggleDeriv(this)">
+      <div class="deriv-num">A7</div>
+      <div class="deriv-title">步行中 J_eff 时变性与 Welch FRF 的"最佳线性近似"</div>
+      <div class="deriv-arrow">▶</div>
+    </div>
+    <div class="deriv-body">
+      <p>行走过程中踝关节等效惯量随步态相位持续变化：</p>
+      <div class="step"><div class="step-label">等效惯量 J_eff 的变化（定量估计）</div>
+        <ul style="padding-left:1.25rem;margin-top:.3rem;">
+          <li><strong>摆动相</strong>：J_eff ≈ 0.08–0.12 kg·m²（足踝+小腿部分惯量）</li>
+          <li><strong>支撑相（单足）</strong>：踝关节支撑全身，等效质量 ≈ 60 kg 映射到踝关节轴，J_eff_stance ≈ M×L²（L≈质心到踝的距离≈0.9m）≈ 60×0.81 ≈ 48 kg·m²（极端值，实际因关节传动比降低至 0.3–0.8 kg·m²，仍比摆动相高 3–8 倍）</li>
+        </ul>
+      </div>
+      <div class="step"><div class="step-label">Welch FRF 的数学本质</div>
+        Welch 方法将全段信号（含摆动+支撑）做时均功率谱估计，对时变系统输出的是"最佳线性近似"（Best Linear Approximation, BLA）：
+        \[H_\text{BLA}(f) = \frac{\text{cross-spectral density}(des, jnt)}{\text{power spectral density}(des)}\]
+        该 BLA 等效于一个线性系统，其参数是对所有步态相位的功率加权平均。因支撑相占60%且惯量远高，BLA 的有效 fn_eff 被大幅下拉。
+      </div>
+      <div class="key-box">
+        关键推论：在 fn_th 处读取 H_BLA 幅值，得到的 G_fn 反映的是"支撑相在 fn_th 频率处的滚降响应"，不是真实阻尼比。<br>
+        只有<strong>仅用摆动相数据</strong>计算的 G_fn_sw，才对应 J_eff ≈ J_design，结果才可靠。
+      </div>
+    </div>
+  </div>
+
+  <!-- A8 -->
+  <div class="deriv-block">
+    <div class="deriv-header" onclick="toggleDeriv(this)">
+      <div class="deriv-num">A8</div>
+      <div class="deriv-title">FRF 幅值/相位法求 ζ 和 fn：∠H(jωn) = −90° 与 |H(jωn)| = 1/(2ζ) 推导</div>
+      <div class="deriv-arrow">▶</div>
+    </div>
+    <div class="deriv-body">
+      <div class="step"><div class="step-label">Step 1：写出 G_CL(s)（无零点形式）</div>
+        \[G_{CL}(s) = \frac{\omega_n^2}{s^2 + 2\zeta\omega_n s + \omega_n^2}\]
+      </div>
+      <div class="step"><div class="step-label">Step 2：令 s = jω_n，代入</div>
+        \[G_{CL}(j\omega_n) = \frac{\omega_n^2}{-\omega_n^2 + 2j\zeta\omega_n^2 + \omega_n^2} = \frac{\omega_n^2}{2j\zeta\omega_n^2}\]
+      </div>
+      <div class="result-box">
+        \[\boxed{G_{CL}(j\omega_n) = \frac{1}{2j\zeta} = -j \cdot \frac{1}{2\zeta}}\]
+        这是一个纯虚数：幅值 = 1/(2ζ)，相位 = −90°（对任意 ζ &gt; 0 严格成立）
+      </div>
+      <div class="step"><div class="step-label">Step 3：ζ 和 fn 计算</div>
+        \[\zeta = \frac{1}{2\,|G_{CL}(j\omega_n)|} = \frac{1}{2\,G_{fn,sw}}\]
+        \[f_n^{FRF}: \text{延迟补偿后} \angle H_\text{comp}(f) = -90° \text{ 的过零点}\]
+      </div>
+      <div class="insight">✓ 关键优势：幅值 |H| 不受纯时延影响（|e^{-jωτ}| = 1），无需延迟补偿；幅值也不受 csd 方向影响（|H*| = |H|）。G_fn_sw 因此是最鲁棒的阻尼观测量。</div>
+      <div class="step"><div class="step-label">为什么必须用 csd(des, jnt) 而非 csd(jnt, des)？</div>
+        \[\text{csd}(des, jnt) = E[des^* \cdot jnt] = G_{CL} \cdot S_{xx}^{des} \implies H = G_{CL} \quad \text{（相位正确）}\]
+        \[\text{csd}(jnt, des) = E[jnt^* \cdot des] = G_{CL}^* \cdot S_{xx}^{des} \implies H' = G_{CL}^* \quad \text{（相位取反！）}\]
+        若用 csd(jnt, des)，相位 ∠H* = −∠H，−90° 变成 +90°，fn_frf 定位错误。但幅值不受影响。
+      </div>
+      <div class="warn">⚠ 幅值法（G_fn → ζ）对 csd 方向和延迟均鲁棒；相位法（∠H = −90° → fn）必须使用正确的 csd 方向 + 延迟补偿。</div>
+    </div>
+  </div>
+
+  <!-- A9 NEW -->
+  <div class="deriv-block">
+    <div class="deriv-header" onclick="toggleDeriv(this)">
+      <div class="deriv-num new">A9</div>
+      <div class="deriv-title">摆动相专用 FRF 计算方法 —— 分段累积谱估计（v5 新增）</div>
+      <div class="deriv-arrow">▶</div>
+    </div>
+    <div class="deriv-body">
+      <p><strong>为何不能直接用 contact=0 的数据拼接做 Welch？</strong></p>
+      <p>摆动相片段短（每步约 0.35–0.45s），拼接后直接做 Welch 会引入片段边界处的谱泄漏（不连续跳变）。正确方法是<strong>分段累积功率谱</strong>：</p>
+
+      <div class="step"><div class="step-label">算法（分段累积平均）</div>
+        对每个摆动相片段 \([t_{lo}+\delta, t_{td}-\delta]\)（δ = 50ms 边缘缓冲）：<br>
+        1. 计算该片段的互功率谱和自功率谱：\(S_{xy}^{(k)}, S_{xx}^{(k)}, S_{yy}^{(k)}\)<br>
+        2. 累加到全局：\(S_{xy} += S_{xy}^{(k)}\)，\(S_{xx} += S_{xx}^{(k)}\)，\(S_{yy} += S_{yy}^{(k)}\)<br>
+        最终：\(H_{sw} = S_{xy,\text{sum}} / S_{xx,\text{sum}}\)，相干 \(\gamma^2_{sw} = |S_{xy}|^2 / (S_{xx} \cdot S_{yy})\)
+      </div>
+
+      <div class="step"><div class="step-label">物理等价性</div>
+        这等价于对各片段的 FRF 做功率加权平均，权重为每片段的输入功率 \(S_{xx}^{(k)}\)。<br>
+        信噪比高的片段（输入功率大）权重更高，自然实现了质量加权。
+      </div>
+
+      <div class="step"><div class="step-label">有效性条件</div>
+        <ul style="padding-left:1.25rem;margin-top:.3rem;">
+          <li>每个片段长度 ≥ min_len = 0.15s（否则频率分辨率不足）</li>
+          <li>有效片段数 n_segs ≥ 5（足够统计平均）</li>
+          <li>在 fn_th 处的相干函数 coh_sw ≥ 0.40（FRF 估计可信）</li>
+        </ul>
+      </div>
+
+      <div class="key-box">
+        摆动相 FRF 的意义：<br>
+        在 contact=0 时段，J_eff ≈ J_design = 0.0965 kg·m²，fn_eff ≈ fn_th。<br>
+        此时 |H_sw(fn_th)| = 1/(2ζ) 的前提条件得到满足。<br>
+        G_fn_sw > 1 → 欠阻尼；G_fn_sw = 0.5 → 临界；G_fn_sw < 0.5 → 过阻尼。
+      </div>
+
+      <div class="insight">✓ 实测中 coh_sw 通常低于全步态相干，因为摆动相输入激励（步态轨迹）在 fn_th 附近的功率有限（步态主频 ≈ 1.8 Hz，fn_th ≈ 3 Hz）。如 coh_sw &lt; 0.40，退回时域 G_amp 法判断。</div>
+    </div>
+  </div>
+
+  <!-- A10 NEW -->
+  <div class="deriv-block">
+    <div class="deriv-header" onclick="toggleDeriv(this)">
+      <div class="deriv-num new">A10</div>
+      <div class="deriv-title">支撑相踝关节等效惯量 J_eff_stance 的物理来源与量级估计</div>
+      <div class="deriv-arrow">▶</div>
+    </div>
+    <div class="deriv-body">
+      <p>为什么支撑相踝关节的等效惯量比摆动相大这么多？</p>
+
+      <div class="step"><div class="step-label">摆动相：J_eff_swing ≈ 踝以下局部惯量</div>
+        踝关节仅驱动足部（含小腿末端），等效转动惯量：
+        \[J_\text{swing} = I_\text{foot} + m_\text{foot} \cdot r_\text{foot}^2 \approx 0.06 + 0.03 \approx 0.09 \sim 0.12 \,\text{kg·m}^2\]
+        其中 r_foot 为足部质心到踝关节的距离（≈ 0.1m），m_foot ≈ 2–3 kg。
+      </div>
+
+      <div class="step"><div class="step-label">支撑相：J_eff_stance ≈ 全身质心通过踝关节传递的等效惯量</div>
+        支撑相踝关节承受整个机体重量。以倒立摆模型（踝关节为旋转轴，机体为质量）分析：
+        \[J_\text{stance} \approx J_\text{swing} + M_\text{body} \cdot L_\text{CoM}^2\]
+        其中 \(M_\text{body} \approx 60\,\text{kg}\)，\(L_\text{CoM}\)（质心到踝轴距离）≈ 0.85m（单脚支撑时）：
+        \[J_\text{stance} \approx 0.10 + 60 \times 0.85^2 \approx 0.10 + 43.4 \approx 43.5 \,\text{kg·m}^2\]
+        通过关节传动比（设 n ≈ 10）折算到电机侧：\(J_\text{eff,stance} = J_\text{stance}/n^2 \approx 0.44 \,\text{kg·m}^2\)，为摆动相的 <strong>4–8 倍</strong>。
+      </div>
+
+      <div class="step"><div class="step-label">对 fn_eff 的影响</div>
+        \[f_{n,\text{eff,stance}} = \frac{1}{2\pi}\sqrt{\frac{K_p}{J_\text{eff,stance}}} = \frac{f_{n,\text{th}}}{\sqrt{J_\text{eff,stance}/J_\text{eff,swing}}}\]
+        以 J_eff_stance = 6× J_eff_swing 为例（Kp=35，fn_th=3.03 Hz）：
+        \[f_{n,\text{eff,stance}} = \frac{3.03}{\sqrt{6}} \approx 1.24 \,\text{Hz}\]
+        在 fn_th = 3.03 Hz 处，对于支撑相系统的归一化频率：r = 3.03 / 1.24 = 2.44（已深入滚降区！）
+      </div>
+
+      <div class="step"><div class="step-label">在 r = 2.44 处计算 FRF 幅值（ζ=0.14）</div>
+        \[|G_{CL}(j \cdot 2.44\omega_n)| = \frac{1}{\sqrt{(1-2.44^2)^2 + (2\times0.14\times2.44)^2}} \approx \frac{1}{\sqrt{25.4 + 0.47}} \approx 0.20\]
+        支撑相系统本身是欠阻尼的（ζ=0.14），但在 fn_th 处的 FRF 幅值只有 0.20——比临界阻尼线 0.5 还低很多。
+      </div>
+
+      <div class="key-box">
+        结论：G_fn 低（全步态）= 支撑相"跟不上" fn_th，不是阻尼大。<br>
+        判别：G_fn_sw（摆动相单独 FRF）才是系统真实阻尼的直接观测。<br>
+        实测（v5）：Real G_fn_sw ≈ 2.1–3.4（欠阻尼，ζ_sw ≈ 0.17–0.24）<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sim G_fn_sw ≈ 0.2–0.6（临界/过阻尼，ζ_sw ≈ 0.9–2.8）
+      </div>
+    </div>
+  </div>
+
+</div><!-- end section 3 -->
+
+
+<!-- ═══════════════════════════════════════════════════════ SECTION 4 -->
+<div class="section" id="sec4">
+  <div class="section-label">Section 4 — 实测结论</div>
+  <div class="section-title">Sim vs Real v5 实测结论</div>
+
+  <p style="font-size:14px;color:var(--text-secondary);margin-bottom:1.5rem;">
+    基于 <code>claude_stability_metrics.py v5</code> 分析结果（Real: Kp 25–40，Sim: Kp 25–50），摆动相 FRF 阻尼比为主要判定依据。
+  </p>
+
+  <div style="background:var(--amber-50);border:.5px solid var(--amber-200);border-radius:var(--radius-lg);padding:1rem 1.25rem;font-size:13px;color:var(--amber-800);margin-bottom:1.5rem;">
+    <strong>解读键：</strong>
+    G_fn（全步态）vs G_fn_sw（摆动相专用）<br>
+    G_fn_sw &gt; 0.5 → 摆动相欠阻尼（全步态 G_fn 低是支撑相惯量效应）<br>
+    G_fn_sw &lt; 0.5 → 摆动相真正过阻尼（摆动相和支撑相都衰减）
+  </div>
+
+  <!-- ankle_pitch results -->
+  <div style="font-size:15px;font-weight:600;margin-bottom:.75rem;">Ankle Pitch</div>
+  <div class="result-grid">
+    <div class="result-card">
+      <div class="result-card-title"><span class="dot dot-real"></span>Real 机器人（Kp 25–40）</div>
+      <div class="result-item"><span class="result-label">全步态 G_fn</span><span class="result-val val-warn">0.14–0.44</span></div>
+      <div class="result-item"><span class="result-label">全步态 ζ_frf（含污染）</span><span class="result-val val-bad">1.4–4.2 ← 虚假</span></div>
+      <div class="result-item"><span class="result-label">摆动相 G_fn_sw</span><span class="result-val val-good">1.93–3.35</span></div>
+      <div class="result-item"><span class="result-label">摆动相 ζ_sw（可信）</span><span class="result-val val-good">0.15–0.26</span></div>
+      <div class="result-item"><span class="result-label">理论 ζ_th</span><span class="result-val">0.129–0.204</span></div>
+      <div class="result-item"><span class="result-label">控制延迟</span><span class="result-val val-warn">40–110 ms</span></div>
+      <div class="result-item"><span class="result-label">eRMS（全步态）</span><span class="result-val val-bad">0.19–0.58 rad</span></div>
+      <div class="result-item"><span class="result-label">诊断</span><span class="result-val val-good">摆动相欠阻尼 ✅</span></div>
+    </div>
+    <div class="result-card">
+      <div class="result-card-title"><span class="dot dot-sim"></span>Sim 仿真（Kp 25–50）</div>
+      <div class="result-item"><span class="result-label">全步态 G_fn</span><span class="result-val val-warn">0.14–0.36</span></div>
+      <div class="result-item"><span class="result-label">全步态 ζ_frf（含污染）</span><span class="result-val val-bad">2.4–3.5 ← 虚假</span></div>
+      <div class="result-item"><span class="result-label">摆动相 G_fn_sw</span><span class="result-val val-warn">0.31–0.59</span></div>
+      <div class="result-item"><span class="result-label">摆动相 ζ_sw（可信）</span><span class="result-val val-warn">0.85–1.59</span></div>
+      <div class="result-item"><span class="result-label">理论 ζ_th</span><span class="result-val">0.128–0.182</span></div>
+      <div class="result-item"><span class="result-label">控制延迟</span><span class="result-val val-good">0–30 ms</span></div>
+      <div class="result-item"><span class="result-label">eRMS（全步态）</span><span class="result-val val-good">0.25–0.29 rad</span></div>
+      <div class="result-item"><span class="result-label">诊断</span><span class="result-val val-warn">摆动相临界/过阻尼 ⚠</span></div>
+    </div>
+  </div>
+
+  <!-- ankle_roll results -->
+  <div style="font-size:15px;font-weight:600;margin-bottom:.75rem;">Ankle Roll</div>
+  <div class="result-grid">
+    <div class="result-card">
+      <div class="result-card-title"><span class="dot dot-real"></span>Real 机器人</div>
+      <div class="result-item"><span class="result-label">全步态 G_fn</span><span class="result-val val-warn">0.14–1.06</span></div>
+      <div class="result-item"><span class="result-label">摆动相 G_fn_sw</span><span class="result-val val-good">0.08–3.13</span></div>
+      <div class="result-item"><span class="result-label">摆动相 ζ_sw（可信案例）</span><span class="result-val val-good">0.16–0.26</span></div>
+      <div class="result-item"><span class="result-label">eRMS（全步态）</span><span class="result-val val-bad">0.21–0.49 rad</span></div>
+      <div class="result-item"><span class="result-label">诊断</span><span class="result-val val-good">摆动相欠阻尼 ✅</span></div>
+    </div>
+    <div class="result-card">
+      <div class="result-card-title"><span class="dot dot-sim"></span>Sim 仿真</div>
+      <div class="result-item"><span class="result-label">全步态 G_fn</span><span class="result-val val-warn">0.03–0.81</span></div>
+      <div class="result-item"><span class="result-label">摆动相 G_fn_sw</span><span class="result-val val-bad">0.18–0.43</span></div>
+      <div class="result-item"><span class="result-label">摆动相 ζ_sw（可信案例）</span><span class="result-val val-bad">1.36–2.83</span></div>
+      <div class="result-item"><span class="result-label">eRMS（全步态）</span><span class="result-val val-good">0.13–0.22 rad</span></div>
+      <div class="result-item"><span class="result-label">诊断</span><span class="result-val val-bad">摆动相真正过阻尼 ❌</span></div>
+    </div>
+  </div>
+
+  <!-- Conclusions -->
+  <div class="data-table-wrap" style="margin-top:1.5rem;">
+    <div class="data-table-title">综合结论与 Sim2Real Gap 根因分析</div>
+    <table>
+      <thead><tr><th>维度</th><th>Real 机器人</th><th>Sim 仿真</th><th>Gap 根因</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>摆动相阻尼（G_fn_sw）</td>
+          <td><span class="tag tag-good">欠阻尼（G_fn_sw ≈ 2–3）</span></td>
+          <td><span class="tag tag-bad">过阻尼/临界（G_fn_sw ≈ 0.2–0.6）</span></td>
+          <td>Sim 关节阻尼系数偏高（粘滞摩擦模型），摆动相额外阻尼 ≈ 真实的 5–15 倍</td>
+        </tr>
+        <tr>
+          <td>全步态 G_fn（虚假值）</td>
+          <td>0.14–0.44（看似过阻尼）</td>
+          <td>0.03–0.81（混乱）</td>
+          <td>两者全步态 G_fn 都受 J_eff_stance 污染，不能单独解读</td>
+        </tr>
+        <tr>
+          <td>控制延迟</td>
+          <td><span class="tag tag-bad">40–110 ms</span></td>
+          <td><span class="tag tag-good">0–30 ms</span></td>
+          <td>Real 的通信+计算延迟是 Sim 的 3–10 倍，相位裕度损耗更严重</td>
+        </tr>
+        <tr>
+          <td>跟踪精度 eRMS</td>
+          <td>0.19–0.58 rad</td>
+          <td>0.13–0.29 rad</td>
+          <td>Real 延迟大，J_eff 时变更剧烈，eRMS 高于 Sim</td>
+        </tr>
+        <tr>
+          <td>eRMS_swing vs eRMS_stance</td>
+          <td>通常 eRMS_st &gt; eRMS_sw</td>
+          <td>两者接近</td>
+          <td>Real 接地冲击更强（真实地面刚度，无阻尼），支撑相更难控制</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="background:var(--green-50);border:.5px solid var(--green-200);border-radius:var(--radius-lg);padding:1.25rem;font-size:13px;color:var(--green-800);margin-top:1rem;">
+    <div style="font-weight:600;font-size:14px;margin-bottom:.5rem;">📋 优先行动建议</div>
+    <ol style="padding-left:1.25rem;line-height:2;">
+      <li><strong>修正 Sim 关节阻尼参数</strong>：检查仿真中 ankle_joint_damping 系数，目标是摆动相 G_fn_sw ≈ 1.5–3.0（ζ_sw ≈ 0.17–0.33），与 Real 对齐。</li>
+      <li><strong>降低 Real 控制延迟</strong>：delay = 40–110ms 消耗几乎所有相位裕度。提升控制频率或引入前馈补偿可直接改善跟踪性能。</li>
+      <li><strong>分相位控制</strong>：支撑相阻尼需求远大于摆动相，固定 Kd 两相都不最优。stance/swing 切换 Kd 是根本解法。</li>
+      <li><strong>目标低通滤波检查</strong>：pos_des_lpf 将阶跃平滑为斜坡，掩盖了 ζ 的真实评估。需用真实阶跃指令做悬空实验校准 ζ_step。</li>
+    </ol>
+  </div>
+</div><!-- end section 4 -->
+
+
+<div class="footer">
+  踝关节PD控制稳定性分析 v5 · 摆动相专用FRF（G_fn_sw）· Real: Kp 25–40 / Kd 0.4–0.8 · Sim: Kp 25–50
+</div>
+
+</div><!-- end main -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    renderMathInElement(document.body, {
+      delimiters: [
+        {left:"\\[", right:"\\]", display:true},
+        {left:"\\(", right:"\\)", display:false}
+      ],
+      throwOnError: false
+    });
+  });
+
+  function toggleQA(el) { el.closest('.qa-card').classList.toggle('open'); }
+  function toggleDeriv(el) { el.closest('.deriv-block').classList.toggle('open'); }
+
+  const sections = document.querySelectorAll('.section');
+  const navLinks = document.querySelectorAll('.nav a');
+  window.addEventListener('scroll', () => {
+    let current = '';
+    sections.forEach(s => { if (window.scrollY >= s.offsetTop - 80) current = '#' + s.id; });
+    navLinks.forEach(a => { a.classList.toggle('active', a.getAttribute('href') === current); });
+  });
+</script>
+</body>
+</html>

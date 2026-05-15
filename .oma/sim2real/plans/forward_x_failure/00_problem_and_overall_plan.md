@@ -32,6 +32,8 @@ real 踝关节低阻尼 / 欠阻尼
 | `01_field_baseline.md` | 记录真机初始现象：前向行走短时可用，但踝关节抖动和推进不足存在 |
 | `20_real_vs_sim_joint_jitter_compare.md` | 证明 real touchdown 尤其 roll 轴 joint range/path/tracking error 高于 sim |
 | `28_forward_x_failure_first6_step_detailed_report.md` | 前 6 步细粒度证据：real 存在 touchdown 过冲、自激点、右踝失效风险 |
+| `28_first6_step_metric_test_plan.md` | 将 28 号报告整理成测试指标方案，建立指标解释与异常现象对应关系 |
+| `29_integrated_metric_and_damping_plan.md` | 总体指标方案：定义 28 事件方案与阻尼方法论的边界、使用流程和统一字段命名 |
 | `28_code_reliability_audit.md` | 说明保留结论的可靠边界 |
 | `31_first6_joint_change_frequency_tables.md` | target/joint 频率和折返统计 |
 | `31b_first6_joint_change_frequency_by_kp.md` | Kp/Kd 分组频率与响应统计 |

@@ -1,0 +1,2 @@
+dataset,file,joint,kp,kd,n_samples,fit_duration_s,target_amp_rad,response_amp_rad,delay_ms,gain,fn_hz,zeta,bias_rad,r2,rmse_rad,score,quality
+sim,test_logs/data_csv/ankle_sim/left_roll_step_kp30_kd0.5.csv,left_ankle_roll_joint,30.0,0.5,2940,14.695,0.015,0.014995000000000001,0.0,0.9952098517404143,17.19560502507071,2.7405712111735063,-2.578514118480946e-07,0.9999663067820613,3.382998487200792e-05,0.9999663067820613,ok

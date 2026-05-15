@@ -29,7 +29,7 @@ joint_list:                   # 关节列表
   - left_elbow_yaw_joint
   - left_wrist_pitch_joint
   - left_wrist_roll_joint
-  - left_claw_joint
+  #- left_claw_joint
 
   - right_shoulder_pitch_joint
   - right_shoulder_roll_joint
@@ -38,7 +38,7 @@ joint_list:                   # 关节列表
   - right_elbow_yaw_joint
   - right_wrist_pitch_joint
   - right_wrist_roll_joint
-  - right_claw_joint      
+  #- right_claw_joint      
 
 actuator_list:  # 执行器列表
   - left_hip_pitch_actuator
@@ -66,7 +66,7 @@ actuator_list:  # 执行器列表
   - left_elbow_yaw_actuator
   - left_wrist_front_actuator
   - left_wrist_back_actuator
-  - left_claw_actuator
+  #- left_claw_actuator
 
   - right_shoulder_pitch_actuator
   - right_shoulder_roll_actuator
@@ -75,7 +75,7 @@ actuator_list:  # 执行器列表
   - right_elbow_yaw_actuator
   - right_wrist_back_actuator
   - right_wrist_front_actuator
-  - right_claw_actuator
+  #- right_claw_actuator
 
 ethercat:
   ifname: enp2s0          # 网卡名
@@ -111,9 +111,9 @@ dcu_network:              # DCU通信网络，请根据实机连接情况配置
       - name: left_wrist_back_actuator
         type: POWER_FLOW_L28
         can_id: 7
-      - name: left_claw_actuator
-        type: OMNI_PICKER
-        can_id: 8
+      #- name: left_claw_actuator
+      #  type: OMNI_PICKER
+      #  can_id: 8
     channel_2:
       - name: right_shoulder_pitch_actuator
         type: POWER_FLOW_R86
@@ -136,9 +136,9 @@ dcu_network:              # DCU通信网络，请根据实机连接情况配置
       - name: right_wrist_front_actuator
         type: POWER_FLOW_L28
         can_id: 7
-      - name: right_claw_actuator
-        type: OMNI_PICKER
-        can_id: 8
+      #- name: right_claw_actuator
+      #  type: OMNI_PICKER
+      #  can_id: 8
     channel_3:
       - name: lumbar_left_actuator
         type: POWER_FLOW_R86
@@ -234,11 +234,11 @@ transmission:                               # 传动层配置
     direction_right: 1.0
     param_path: null
 
-  - name: left_claw_trans
-    type: SimpleTransmission
-    joint: left_claw_joint
-    actuator: left_claw_actuator
-    direction: 1.0
+  #- name: left_claw_trans
+  #  type: SimpleTransmission
+  #  joint: left_claw_joint
+  #  actuator: left_claw_actuator
+  #  direction: 1.0
 
   - name: right_shoulder_pitch_trans
     type: SimpleTransmission
@@ -280,11 +280,11 @@ transmission:                               # 传动层配置
     direction_right: 1.0
     param_path: null
 
-  - name: right_claw_trans
-    type: SimpleTransmission
-    joint: right_claw_joint
-    actuator: right_claw_actuator
-    direction: 1.0
+  #- name: right_claw_trans
+  #  type: SimpleTransmission
+  #  joint: right_claw_joint
+  #  actuator: right_claw_actuator
+  #  direction: 1.0
 
   - name: lumbar_parallel_trans
     type: LumbarParallelTransmission
