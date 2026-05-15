@@ -165,11 +165,178 @@ def write_outputs(meta: dict[str, float], details: list[dict[str, float | str]],
     print(csv_out)
 
 
+def by_joint(details: list[dict[str, float | str]]) -> dict[str, dict[str, float | str]]:
+    return {str(row["joint"]): row for row in details}
+
+
+def safe_ratio(num: float, den: float) -> float:
+    return num / den if abs(den) > 1e-12 else math.nan
+
+
+def write_compare_outputs(
+    sim_meta: dict[str, float],
+    sim_details: list[dict[str, float | str]],
+    real_meta: dict[str, float],
+    real_details: list[dict[str, float | str]],
+    out_dir: Path,
+    sim_source: Path,
+    real_source: Path,
+) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    sim_rows = by_joint(sim_details)
+    real_rows = by_joint(real_details)
+    joints = sorted(set(sim_rows) & set(real_rows))
+
+    compare_rows: list[dict[str, float | str]] = []
+    for joint in joints:
+        sim = sim_rows[joint]
+        real = real_rows[joint]
+        sim_rms = float(sim["rms_error_rad"])
+        real_rms = float(real["rms_error_rad"])
+        sim_target_range = float(sim["target_range_rad"])
+        real_target_range = float(real["target_range_rad"])
+        sim_corr = float(sim["best_delay_corr"])
+        real_corr = float(real["best_delay_corr"])
+        compare_rows.append(
+            {
+                "joint": joint,
+                "sim_rms_error_rad": sim_rms,
+                "real_rms_error_rad": real_rms,
+                "real_minus_sim_rms_error_rad": real_rms - sim_rms,
+                "real_over_sim_rms_error": safe_ratio(real_rms, sim_rms),
+                "sim_target_range_rad": sim_target_range,
+                "real_target_range_rad": real_target_range,
+                "real_over_sim_target_range": safe_ratio(real_target_range, sim_target_range),
+                "sim_pos_range_rad": float(sim["pos_range_rad"]),
+                "real_pos_range_rad": float(real["pos_range_rad"]),
+                "sim_pos_over_target": float(sim["range_ratio_pos_over_target"]),
+                "real_pos_over_target": float(real["range_ratio_pos_over_target"]),
+                "sim_delay_ms": float(sim["best_delay_ms"]),
+                "real_delay_ms": float(real["best_delay_ms"]),
+                "sim_corr": sim_corr,
+                "real_corr": real_corr,
+                "corr_drop_real_minus_sim": real_corr - sim_corr,
+                "sim_vel_p95_rad_s": float(sim["vel_abs_p95_rad_s"]),
+                "real_vel_p95_rad_s": float(real["vel_abs_p95_rad_s"]),
+            }
+        )
+
+    csv_out = out_dir / "t23_sim_real_joint_tracking_compare.csv"
+    md_out = out_dir / "t23_sim_real_joint_tracking_compare.md"
+    fields = list(compare_rows[0].keys()) if compare_rows else []
+    with csv_out.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(compare_rows)
+
+    sorted_by_real_gap = sorted(
+        compare_rows,
+        key=lambda item: float(item["real_minus_sim_rms_error_rad"]),
+        reverse=True,
+    )
+    sorted_by_target_ratio = sorted(
+        compare_rows,
+        key=lambda item: float(item["real_over_sim_target_range"]),
+        reverse=True,
+    )
+    sorted_by_corr_drop = sorted(
+        compare_rows,
+        key=lambda item: float(item["corr_drop_real_minus_sim"]),
+    )
+
+    avg_sim_rms = statistics.fmean(float(row["sim_rms_error_rad"]) for row in compare_rows)
+    avg_real_rms = statistics.fmean(float(row["real_rms_error_rad"]) for row in compare_rows)
+    avg_sim_corr = statistics.fmean(float(row["sim_corr"]) for row in compare_rows)
+    avg_real_corr = statistics.fmean(float(row["real_corr"]) for row in compare_rows)
+
+    def table_row(row: dict[str, float | str]) -> str:
+        return (
+            "| {joint} | {sim_rms_error_rad:.4f} | {real_rms_error_rad:.4f} | "
+            "{real_minus_sim_rms_error_rad:+.4f} | {real_over_sim_rms_error:.2f}x | "
+            "{real_over_sim_target_range:.2f}x | {sim_pos_over_target:.3f} | "
+            "{real_pos_over_target:.3f} | {sim_delay_ms:.1f} | {real_delay_ms:.1f} | "
+            "{sim_corr:.3f} | {real_corr:.3f} |".format(**row)
+        )
+
+    lines = [
+        "# t23 Sim-vs-Real Joint Tracking Compare",
+        "",
+        f"Sim source: `{sim_source}`",
+        f"Real source: `{real_source}`",
+        "",
+        "## Data Quality",
+        "",
+        "| Dataset | Rows | Duration s | Sample Hz | dt min ms | dt max ms |",
+        "|---|---:|---:|---:|---:|---:|",
+        (
+            f"| sim | {int(sim_meta['rows'])} | {sim_meta['duration_s']:.3f} | "
+            f"{sim_meta['sample_hz']:.3f} | {sim_meta['dt_min_s'] * 1000.0:.3f} | "
+            f"{sim_meta['dt_max_s'] * 1000.0:.3f} |"
+        ),
+        (
+            f"| real | {int(real_meta['rows'])} | {real_meta['duration_s']:.3f} | "
+            f"{real_meta['sample_hz']:.3f} | {real_meta['dt_min_s'] * 1000.0:.3f} | "
+            f"{real_meta['dt_max_s'] * 1000.0:.3f} |"
+        ),
+        "",
+        "## Aggregate Tracking",
+        "",
+        "| Metric | Sim | Real | Real / Sim |",
+        "|---|---:|---:|---:|",
+        f"| mean RMS error across joints | {avg_sim_rms:.4f} rad | {avg_real_rms:.4f} rad | {safe_ratio(avg_real_rms, avg_sim_rms):.2f}x |",
+        f"| mean best-delay correlation | {avg_sim_corr:.3f} | {avg_real_corr:.3f} | {safe_ratio(avg_real_corr, avg_sim_corr):.2f}x |",
+        "",
+        "## Largest Real-minus-Sim RMS Gaps",
+        "",
+        "| Joint | Sim RMS | Real RMS | Δ RMS | Real/Sim RMS | Target range Real/Sim | Sim pos/target | Real pos/target | Sim delay ms | Real delay ms | Sim corr | Real corr |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    lines.extend(table_row(row) for row in sorted_by_real_gap)
+    lines += [
+        "",
+        "## Largest Real Target-Range Increases",
+        "",
+        "| Joint | Sim RMS | Real RMS | Δ RMS | Real/Sim RMS | Target range Real/Sim | Sim pos/target | Real pos/target | Sim delay ms | Real delay ms | Sim corr | Real corr |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    lines.extend(table_row(row) for row in sorted_by_target_ratio[:6])
+    lines += [
+        "",
+        "## Largest Correlation Drops",
+        "",
+        "| Joint | Sim RMS | Real RMS | Δ RMS | Real/Sim RMS | Target range Real/Sim | Sim pos/target | Real pos/target | Sim delay ms | Real delay ms | Sim corr | Real corr |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    lines.extend(table_row(row) for row in sorted_by_corr_drop[:6])
+    lines += [
+        "",
+        "## Interpretation Boundary",
+        "",
+        "- The two logs have nearly identical duration and sample rate, so per-log statistics are comparable.",
+        "- Target trajectories are not identical; Real/Sim target-range ratios must be checked before interpreting RMS deltas as pure actuator degradation.",
+        "- Delay estimates with low correlation are weak evidence; in those rows, RMS, range ratio, and correlation drop carry more weight than the delay number.",
+    ]
+    md_out.write_text("\n".join(lines) + "\n")
+    print(md_out)
+    print(csv_out)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--csv", required=True, type=Path)
+    parser.add_argument("--csv", type=Path)
+    parser.add_argument("--compare-sim", type=Path)
+    parser.add_argument("--compare-real", type=Path)
     parser.add_argument("--out-dir", required=True, type=Path)
     args = parser.parse_args()
+    if args.compare_sim or args.compare_real:
+        if not args.compare_sim or not args.compare_real:
+            raise SystemExit("--compare-sim and --compare-real must be provided together")
+        sim_meta, sim_details = analyze(args.compare_sim)
+        real_meta, real_details = analyze(args.compare_real)
+        write_compare_outputs(sim_meta, sim_details, real_meta, real_details, args.out_dir, args.compare_sim, args.compare_real)
+        return
+    if not args.csv:
+        raise SystemExit("--csv is required unless --compare-sim/--compare-real are used")
     meta, details = analyze(args.csv)
     write_outputs(meta, details, args.out_dir, args.csv)
 

@@ -49,6 +49,10 @@
 
 - `test_logs/data_csv/t23_joint_20260515_104435.csv`
 - 初筛报告: `.oma/sim2real/high_speed_walk_unstable_5.15/tables/t23_joint_tracking_summary.md`
+- 新增 sim/real 对比数据:
+  - sim: `test_logs/data_csv/t23_joint_20260515_1_sim.csv`
+  - real: `test_logs/data_csv/t23_joint_20260515_1_real.csv`
+  - 报告: `.oma/sim2real/high_speed_walk_unstable_5.15/results/round_00b_t23_sim_real_compare.md`
 
 t23 只包含关节目标、位置、速度，不包含速度命令、IMU、接触、里程计或跌倒事件。因此它只能回答“高速目标下执行链是否紧张”，不能单独解释“为什么不稳”。
 
@@ -60,6 +64,16 @@ t23 只包含关节目标、位置、速度，不包含速度命令、IMU、接�
 | 髋 roll 的目标幅值大但实际幅值很小 | `left_hip_roll pos/target=0.143`, `right_hip_roll=0.164` | 可能存在高速横向稳定控制跟不上或目标被限幅/实际响应不足 |
 | 多个关节估计延迟在 `80~150 ms` | 髋/膝多项 delay estimate 落在此范围 | 对 `cycle_time=0.55/0.45 s` 的高速步态可能已经吃掉较大相位裕度 |
 | 踝关节不是 t23 中最大误差来源 | 踝 pitch/roll RMS 低于髋 pitch/roll 与右膝 | 踝关节仍要监控，但 Round 1 不应预设踝为唯一根因 |
+
+新增 t23 sim/real 对比结论:
+
+| 观察 | 证据 | 初步含义 |
+|---|---|---|
+| real 平均跟踪误差高于 sim | mean RMS `0.4205 rad` vs `0.2945 rad` (`1.43x`) | real 执行链在该高速工况下明显更紧张 |
+| target-position 相关性在 real 中塌陷 | mean corr `0.757 -> 0.231` | real 不是单纯固定延迟，而是多关节跟随质量下降 |
+| 最大 real-minus-sim gap 在髋/膝 | `left_hip_pitch +0.4454 rad`, `right_hip_pitch +0.3806 rad`, `right_knee +0.3321 rad` | HS-01、HS-02 优先级上调 |
+| sim/real target 不等价 | real hip_pitch target range 约 `2.47x` sim，hip_yaw 约 `2.37x` sim | 下一轮必须 matched-condition 复采，避免把目标幅值差误判为纯 actuator gap |
+| hip_roll 在 sim 和 real 都低响应 | pos/target 约 `0.13~0.15` | roll 通道可能是策略/限幅/映射共性问题，不是 real-only gap |
 
 ## 当前假设
 
