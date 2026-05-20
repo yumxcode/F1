@@ -13,9 +13,9 @@ _Algorithm: rl_walk_leg | Hardware: X1 | Policy: src/module/control_module/polic
 
 | 项目 | 当前值 |
 |---|---|
-| 当前 sim2real 轮次 | Round 1 |
-| 当前轮状态 | planned |
-| 当前重点 | high_speed_boundary_and_logging |
+| 当前 sim2real 轮次 | Round 1c |
+| 当前轮状态 | analyzed; hold parameter escalation |
+| 当前重点 | t27 Kp/Kd 45 real diagnostic |
 | 当前问题 | 自研算法高速行走不稳 |
 | Standalone warning | `.oma/best.json` 缺失，deploy gate advisory |
 
@@ -25,8 +25,8 @@ _Algorithm: rl_walk_leg | Hardware: X1 | Policy: src/module/control_module/polic
 |---|---|---|---|---|
 | context_and_contract_check | completed | 读取部署栈和当前配置，确认基线 | 本文件 + `SUMMARY.md` | `.oma/deploy_info.json` 已同步当前踝 `30/1.5` |
 | initial_t23_screen | completed | 用现有 t23 日志筛查执行链压力，并完成 t23 sim/real 对比 | `scripts/analyze_t23_joint_tracking.py` | `results/round_00b_t23_sim_real_compare.md` |
-| high_speed_boundary_and_logging | planned | 找当前参数稳定速度边界，并采集完整日志 | `plans/round_01_high_speed_boundary_and_logging.md` | 待实机 |
-| parameter_identification | planned | 按 Round 1 证据决定髋/膝/踝/节律辨识方向 | `plans/round_01b_hip_kpkd_response_test.md` | 待实机 |
+| high_speed_boundary_and_logging | in_progress | 找当前参数稳定速度边界，并采集完整日志 | `plans/round_01_high_speed_boundary_and_logging.md` | `results/round_01c_t27_kpkd_45_real_diagnostic.md` |
+| parameter_identification | in_progress | 按 Round 1 证据决定髋/膝/踝/节律辨识方向 | `plans/round_01b_hip_kpkd_response_test.md` | `results/round_01c_t27_kpkd_45_real_diagnostic.md` |
 | fix_validation | pending | 对单一修复方向做 A/B 验证 | 待创建 | 待更新 |
 | deployment_decision | pending | 决定 deploy / hold / return to design | 待创建 | 待更新 |
 
@@ -37,7 +37,9 @@ _Algorithm: rl_walk_leg | Hardware: X1 | Policy: src/module/control_module/polic
 | Round 0 | completed | 现有 t23 关节日志初筛 | `results/round_00_t23_initial_screen.md` |
 | Round 0b | completed | t23 sim/real 关节跟踪对比 | `results/round_00b_t23_sim_real_compare.md` |
 | Round 1 | planned | 高速边界与完整日志采集 | 待生成 |
-| Round 1b | planned | hip Kp/Kd 响应增强 A/B 实验 | 待生成 |
+| Round 1b E1 | analyzed; hold | hip_pitch `60/6` + hip_yaw `45/7` 响应增强 A/B 实验 | `results/round_01b_e1_kpkd_real_compare.md` |
+| Round 1c | analyzed; hold | t27 full log for Kp/Kd `45/3,45/3,45/4,80/10,30/1.5,30/1.5` | `results/round_01c_t27_kpkd_45_real_diagnostic.md` |
+| Round 1d | completed | 所有关节 target hit 与 pos 跟随独立分析 | `results/round_01d_all_joint_target_hit_pos_following.md` |
 
 ## 当前结论
 
@@ -46,6 +48,8 @@ _Algorithm: rl_walk_leg | Hardware: X1 | Policy: src/module/control_module/polic
 - sim/real target range 不完全一致，尤其 real 髋 pitch/yaw 目标幅值明显更大；下一轮必须做 matched-condition 复采。
 - 若做部署侧参数实验，优先执行 `round_01b_hip_kpkd_response_test.md` 中的 E1: hip_pitch `50/5 -> 60/6`，hip_yaw `35/6 -> 45/7`，hip_roll 暂不改。
 - Round 1 必须采集 t27 类完整诊断日志: cmd、phase、action、pos、pos_des、tau、parallel flag、IMU、接触或可推断 touchdown 信息、视频时间点。
+- Round 1c t27 显示当前 Kp/Kd 45 配置缓解了 `right_hip_roll` 正向饱和，但 hip_roll 仍低响应；`left_hip_roll` 上限 hit `59.6%`，零 yaw 命令下 yaw range `0.736 rad`，left/right contact fraction `0.136/0.669`。不建议继续直接加 hip_roll Kp，下一步优先查 yaw/roll/contact 耦合和 `cycle_time=0.55`。
+- Round 1d 单独梳理所有关节 target hit 与 pos 跟随: clamp 主导为 `right_ankle_pitch_joint`、`left_hip_roll_joint`、`left_ankle_pitch_joint`; 低实现但非 clamp 主导为 `right_hip_roll_joint`、`left_hip_pitch_joint`、`right_hip_pitch_joint`; 下一轮用该表作为 pass/fail dashboard。
 
 ## 维护规则
 

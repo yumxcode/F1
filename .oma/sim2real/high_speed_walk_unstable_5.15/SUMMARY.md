@@ -90,9 +90,45 @@ t23 只包含关节目标、位置、速度，不包含速度命令、IMU、接�
 - 不建议先调踝 `kp/kd`，除非 Round 1 完整日志显示 touchdown 冲击或踝 torque saturation 是首要触发点。
 - 不建议只用 t23 关节日志下结论；高速不稳必须同时看命令、机身姿态和接触事件。
 
+## 最新 t27 结果
+
+数据:
+
+- `test_logs/data_csv/t27_joint_20260518_1_real.csv`
+- 报告: `.oma/sim2real/high_speed_walk_unstable_5.15/results/round_01c_t27_kpkd_45_real_diagnostic.md`
+- 表格: `.oma/sim2real/high_speed_walk_unstable_5.15/tables/t27_20260518_1_real_diagnostic/t27_joint_diagnostic_summary.md`
+
+当前配置:
+
+- stiffness: `[45,45,45,80,30,30] x2`
+- damping: `[3,3,4,10,1.5,1.5] x2`
+- `cycle_time=0.55`
+
+关键结论:
+
+- `right_hip_roll` 相比 E1 的正向 target 饱和已经缓解，但仍几乎不跟随: RMS `0.3894`, pos/target `0.149`, corr `0.018`。
+- `left_hip_roll` 成为更强信号: upper hit `59.6%`, pos/target `0.114`, effort p95 `33.675`。
+- 零 yaw 命令下 yaw range `0.736 rad`，gyro z p95 `1.288 rad/s`。
+- left/right contact fraction `0.136/0.669`，接触检测或真实接触明显不对称。
+- hip_pitch 仍有较大执行压力: group RMS `0.4953`, delay 约 `130 ms`。
+
+## 最新 target-hit / pos-following 结论
+
+资料:
+
+- 方案: `.oma/sim2real/high_speed_walk_unstable_5.15/plans/round_01d_all_joint_target_hit_pos_following.md`
+- 结果: `.oma/sim2real/high_speed_walk_unstable_5.15/results/round_01d_all_joint_target_hit_pos_following.md`
+
+分类:
+
+- clamp dominated: `right_ankle_pitch_joint` hit `66.0%`, `left_hip_roll_joint` hit `61.7%`, `left_ankle_pitch_joint` hit `25.5%`。
+- low realization without clamp: `right_hip_roll_joint` pos/target `0.149`, `left_hip_pitch_joint` `0.177`, `right_hip_pitch_joint` `0.248`。
+- weak timing/shape correlation: `right_hip_roll_joint` corr `0.018`, `right_knee_pitch_joint` `0.135`, `left_hip_yaw_joint` `0.199`, `left_ankle_pitch_joint` `-0.083`。
+
+该结果强化了“不要直接整体加 Kp”的判断。下一轮需要分开验证 target 生成、接触/yaw 耦合和执行链 realization。
+
 ## 下一步
 
-执行 Round 1:
-
-- 方案: `.oma/sim2real/high_speed_walk_unstable_5.15/plans/round_01_high_speed_boundary_and_logging.md`
-- 目标: 找到当前参数的稳定速度边界，并采集足够日志定位 instability onset。
+- 不建议继续直接增大 hip_roll Kp。
+- 优先复测 `cycle_time=0.7`、同样 `cmd_x=0.4`，判断 `0.55 s` 周期是否触发 yaw/contact 不对称。
+- 下一轮必须同时看 yaw range、left/right contact fraction、left_hip_roll upper-hit、right_hip_roll corr、right_hip_pitch RMS/delay。
