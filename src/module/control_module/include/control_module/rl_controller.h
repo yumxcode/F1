@@ -1,32 +1,51 @@
 #pragma once
+
 #include <onnxruntime/onnxruntime_cxx_api.h>
+
+#include <atomic>
+#include <chrono>
+#include <cstddef>
 #include <memory>
 #include <set>
-#include <atomic>
-#include <fstream>
-#include <filesystem>
+#include <string>
+#include <thread>
+#include <vector>
 
+#include "aimrt_module_cpp_interface/executor/executor.h"
 #include "control_module/controller_base.h"
+#include "control_module/data_file_logger.h"
 #include "control_module/rotation_tools.h"
 
 namespace xyber_x1_infer::rl_control_module {
 
 class RLController : public ControllerBase {
  public:
-  RLController(const bool use_sim_handles);
-  ~RLController() = default;
+  explicit RLController(bool use_sim_handles);
+  ~RLController() override = default;
 
-  void Init(const YAML::Node &cfg_node) override;
+  void Init(const YAML::Node& cfg_node) override;
   void RestartController() override;
 
   void Update() override;
   my_ros2_proto::msg::JointCommand GetJointCmdData() override;
+
+  void SetWalkLegEntered(bool entered);
+  void SetLogExecutor(aimrt::executor::ExecutorRef executor);
+  void StopLoggingWorker();
 
  private:
   void LoadModel();
   void UpdateStateEstimation();
   void ComputeObservation();
   void ComputeActions();
+  void StartLoggingWorker();
+  void LoggingWorkerLoop();
+  void DrainDiagBuffer();
+  void DrainTmBuffer();
+  void FinalizeDiagLogging(const char* reason);
+  void FinalizeTmLogging(const char* reason);
+  bool EnqueueDiagFrame();
+  bool EnqueueTmFrame();
 
  private:
   struct WalkStepConf {
@@ -60,103 +79,114 @@ class RLController : public ControllerBase {
     std::set<std::string> paralle_list;
   } lpf_conf_;
 
-  // onnx
   std::unique_ptr<Ort::Session> session_ptr_;
   Ort::MemoryInfo memory_info_;
-  std::vector<const char *> input_names_;
-  std::vector<const char *> output_names_;
+  std::vector<const char*> input_names_;
+  std::vector<const char*> output_names_;
   std::vector<std::vector<int64_t>> input_shapes_;
   std::vector<std::vector<int64_t>> output_shapes_;
 
-  // compute in algorithm
   std::vector<float> actions_;
   std::vector<float> observations_;
   vector_t last_actions_;
-  // vector_t propri_history_buffer_;
   Eigen::Matrix<float, Eigen::Dynamic, 1> propri_history_buffer_;
   struct Proprioception {
     vector_t joint_pos;
     vector_t joint_vel;
+    vector_t joint_effort;
     vector3_t base_ang_vel;
     vector3_t base_euler_xyz;
     vector3_t projected_gravity;
+    quaternion_t imu_quat;
+    vector3_t imu_accel;
   } propri_;
 
-  // other
-  int64_t loop_count_;
+  int64_t loop_count_{0};
   std::vector<digital_lp_filter<double>> low_pass_filters_;
   std::atomic_bool is_first_frame_{true};
+  aimrt::executor::ExecutorRef log_executor_;
+  std::atomic_bool log_worker_running_{false};
+  std::atomic_bool log_worker_started_{false};
+  std::atomic_bool log_worker_stopped_{true};
 
-  // T1 静态测试 CSV 日志（从 obs pipeline 中提取数据，与仿真对比）
-  std::ofstream t1_joint_pos_file_;   // T1-1: (joint_pos - init_state) * dof_pos_scale
-  std::ofstream t1_joint_vel_file_;   // T1-2: joint_vel * dof_vel_scale
-  std::ofstream t1_imu_file_;         // T1-3: ang_vel * ang_vel_scale + euler * quat_scale
-  bool t1_logging_enabled_{false};
-  bool t1_logging_triggered_{false};  // 是否已触发记录
-  std::atomic_bool zero_mode_entered_{false};  // zero 模式进入标志（由 ControlModule 设置）
-  int t1_log_count_{0};
-  int t1_log_max_count_{0};
-  std::string t1_log_dir_;
-  
- public:
-  void SetZeroModeEntered(bool entered) { zero_mode_entered_.store(entered, std::memory_order_release); }
-  void SetWalkLegEntered(bool entered) { walk_leg_entered_.store(entered, std::memory_order_release); }
-  void SetT4RecordRequested(bool requested, const std::string& state_name = "") {
-    if (requested && t4_trigger_state_ != state_name) {
-      t4_logging_triggered_.store(false, std::memory_order_release);
-    }
-    t4_trigger_state_ = state_name;
-    t4_record_requested_.store(requested, std::memory_order_release);
-  }
-  void UpdateT1Logging();  // 独立的 T1 日志更新，可在非活跃状态下调用
-  void UpdateT4Logging();  // 独立的 T4 原始传感器日志更新，可在非活跃状态下调用（zero/stand/walk_leg 触发）
-  
- private:
+  DataFileLogger diag_logger_;
+  bool diag_logging_enabled_{false};
+  bool diag_logging_triggered_{false};
+  bool diag_pending_frame_{false};
+  std::atomic_bool diag_walk_entered_{false};
+  int diag_log_count_{0};
+  int diag_log_max_count_{0};
+  std::string diag_log_dir_;
+  std::atomic_size_t diag_dropped_count_{0};
+  std::atomic<int64_t> diag_last_enqueue_ns_{0};
 
-  // T2 测试 CSV 日志（进入 walk_leg 后触发记录）
-  std::ofstream t2_gait_file_;       // T2-2 步态周期
-  std::ofstream t2_joint_file_;      // T2-3 关节轨迹
-  std::ofstream t2_pose_file_;       // T2-4 机身姿态
-  std::ofstream t2_action_file_;     // T2-5 网络输出
-  bool t2_logging_enabled_{false};
-  bool t2_logging_triggered_{false};  // 是否已触发记录
-  std::atomic_bool walk_leg_entered_{false};  // walk_leg 模式进入标志（由 ControlModule 设置）
-  int t2_log_count_{0};
-  int t2_log_max_count_{0};
-  std::string t2_log_dir_;
-  // T2 步态检测辅助变量
-  bool last_contact_state_[2]{false, false};
-  double last_contact_time_[2]{0.0, 0.0};
+  DataFileLogger tm_logger_;
+  bool tm_logging_enabled_{false};
+  bool tm_logging_triggered_{false};
+  std::atomic_bool tm_walk_entered_{false};
+  int tm_log_count_{0};
+  int tm_log_max_count_{0};
+  std::string tm_log_dir_;
+  std::atomic_size_t tm_dropped_count_{0};
+  std::atomic<int64_t> tm_last_enqueue_ns_{0};
 
-  void LogT2Data();
-  bool DetectFootContact(int foot_idx);
+  struct DiagFrame {
+    int64_t timestamp_ns{0};
+    double phase_sin{0.0};
+    double phase_cos{0.0};
+    double cmd_linear_x{0.0};
+    double cmd_linear_y{0.0};
+    double cmd_angular_z{0.0};
+    double base_euler_x{0.0};
+    double base_euler_y{0.0};
+    double base_euler_z{0.0};
+    double base_ang_vel_x{0.0};
+    double base_ang_vel_y{0.0};
+    double base_ang_vel_z{0.0};
+    double imu_quat_w{0.0};
+    double imu_quat_x{0.0};
+    double imu_quat_y{0.0};
+    double imu_quat_z{0.0};
+    double imu_gyro_x{0.0};
+    double imu_gyro_y{0.0};
+    double imu_gyro_z{0.0};
+    double imu_accel_x{0.0};
+    double imu_accel_y{0.0};
+    double imu_accel_z{0.0};
+    int clip_count{0};
+    std::vector<float> actions;
+    std::vector<double> joint_pos;
+    std::vector<double> joint_vel;
+    std::vector<double> joint_effort;
+    std::vector<double> pos_des_raw;
+    std::vector<double> pos_des_lpf;
+    std::vector<double> tau_des_raw;
+    std::vector<double> tau_des_lpf;
+    std::vector<int> is_parallel;
+  };
 
-  // T3 测试 CSV 日志（进入 walk_leg 后触发记录）
-  std::ofstream t3_current_file_;       // T3 电机电流
-  bool t3_logging_enabled_{false};
-  bool t3_logging_triggered_{false};  // 是否已触发记录
-  int t3_log_count_{0};
-  int t3_log_max_count_{0};
-  std::string t3_log_dir_;
+  struct TmFrame {
+    std::vector<float> observations;
+  };
 
-  void LogT3Data();
+  std::vector<DiagFrame> diag_ring_;
+  std::vector<TmFrame> tm_ring_;
+  std::atomic<size_t> diag_write_idx_{0};
+  std::atomic<size_t> diag_read_idx_{0};
+  std::atomic<size_t> tm_write_idx_{0};
+  std::atomic<size_t> tm_read_idx_{0};
 
-  // T4 原始传感器数据记录（zero/stand/walk_leg 模式触发，记录未缩放的原始数据，40s @ 1000Hz）
-  std::ofstream t4_raw_joint_pos_file_;   // T4-1: 原始关节位置 (rad)
-  std::ofstream t4_raw_joint_vel_file_;   // T4-2: 原始关节速度 (rad/s)
-  std::ofstream t4_raw_motor_current_file_; // T4-3: 原始电机电流 (A/Nm)
-  std::ofstream t4_raw_imu_quat_file_;    // T4-4: 原始IMU四元数 (w,x,y,z)
-  std::ofstream t4_raw_imu_gyro_file_;    // T4-5: 原始IMU角速度 (rad/s)
-  std::ofstream t4_raw_imu_accel_file_;   // T4-6: 原始IMU加速度 (m/s^2)
-  bool t4_logging_enabled_{false};
-  std::atomic_bool t4_logging_triggered_{false};
-  std::atomic_bool t4_record_requested_{false};  // T4 记录请求标志（由 ControlModule 在 zero/stand/walk_leg 时设置）
-  std::string t4_trigger_state_;  // 触发 T4 记录时的状态名
-  int t4_log_count_{0};
-  int t4_log_max_count_{0};
-  std::string t4_log_dir_;
+  std::vector<double> pd_pos_des_raw_;
+  std::vector<double> pd_pos_des_lpf_;
+  std::vector<double> pd_tau_des_raw_;
+  std::vector<double> pd_tau_des_lpf_;
+  std::vector<int> pd_is_parallel_;
 
-  void LogT4RawSensorData();
+  double obs_phase_sin_{0.0};
+  double obs_phase_cos_{1.0};
+  double obs_cmd_linear_x_{0.0};
+  double obs_cmd_linear_y_{0.0};
+  double obs_cmd_angular_z_{0.0};
 };
 
 }  // namespace xyber_x1_infer::rl_control_module

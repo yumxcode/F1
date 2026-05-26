@@ -32,6 +32,7 @@ class ControlModule : public aimrt::ModuleBase {
  private:
   aimrt::CoreRef core_;
   aimrt::executor::ExecutorRef executor_;
+  aimrt::executor::ExecutorRef log_executor_;
 
   std::vector<aimrt::channel::SubscriberRef> subs_;
   aimrt::channel::PublisherRef joint_cmd_pub_;
@@ -48,9 +49,7 @@ class ControlModule : public aimrt::ModuleBase {
   std::atomic_bool run_flag_{true};
   time_point<high_resolution_clock> last_trigger_time_;
 
-  // 状态监听：检测进入 zero 模式
   std::string last_state_name_;
-  std::atomic_bool zero_mode_entered_{false};  // zero 模式进入标志
 };
 
 }  // namespace xyber_x1_infer::rl_control_module
